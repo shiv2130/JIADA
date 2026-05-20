@@ -1,0 +1,58 @@
+<?php
+$pageTitle = "Transfer of Lease Hold Rights - JIADA Portal";
+$currentPage = 'lease-transfer';
+ob_start();
+?>
+<div class="container" style="max-width: 800px; padding-top: 30px;">
+    <div class="card">
+        <div class="card-header">
+            <h2><i class="fas fa-exchange-alt"></i> Transfer of Lease Hold Rights</h2>
+        </div>
+        <div class="card-body">
+            <div class="alert alert-info">
+                <i class="fas fa-info-circle"></i> Transfer your lease hold rights to another party. Premium: 15% (MSME) or 25% (others) of prevailing land premium.
+            </div>
+            <form id="transferForm">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                    <div class="form-group"><label>Lease Agreement No.</label><input type="text" name="lease_no" class="form-control" required></div>
+                    <div class="form-group"><label>Transferee Name</label><input type="text" name="to_user_name" class="form-control" required></div>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                    <div class="form-group"><label>Transferee Mobile</label><input type="tel" name="to_user_mobile" class="form-control" required></div>
+                    <div class="form-group"><label>Transferee Email</label><input type="email" name="to_user_email" class="form-control"></div>
+                </div>
+                <div class="form-group"><label>Transfer Reason</label><textarea name="transfer_reason" class="form-control" rows="3" required></textarea></div>
+                <div class="form-group"><label>Consideration Amount (₹)</label><input type="number" name="consideration_amount" class="form-control" required></div>
+                <div class="form-group"><label>Is MSME?</label><select name="is_msme" class="form-control"><option value="0">No</option><option value="1">Yes</option></select></div>
+                <div class="form-group"><label>Supporting Documents</label><input type="file" name="documents[]" class="form-control" multiple></div>
+                <button type="submit" class="btn btn-primary"><i class="fas fa-paper-plane"></i> Submit Application</button>
+            </form>
+        </div>
+    </div>
+</div>
+<script>
+$('#transferForm').on('submit', function(e) {
+    e.preventDefault();
+    const formData = new FormData(this);
+    $.ajax({
+        url: '<?php echo APP_URL; ?>/api/lease/transfer',
+        type: 'POST',
+        data: formData,
+        processData: false,
+        contentType: false,
+        success: function(res) {
+            if (res.success) {
+                showAlert('Transfer application submitted. Premium: ₹' + (res.data.premium || 0), 'success');
+                $('#transferForm')[0].reset();
+            } else {
+                showAlert(res.message || 'Submission failed', 'danger');
+            }
+        },
+        error: function() { showAlert('Network error. Please try again.', 'danger'); }
+    });
+});
+</script>
+<?php
+$content = ob_get_clean();
+include TEMPLATES_PATH . '/layout.php';
+?>

@@ -1,0 +1,28 @@
+{
+{
+  "name": "jiada-mobile",
+  "version": "0.1.0",
+  "private": true,
+  "main": "index.js",
+  "scripts": {
+    "start": "react-native start",
+    "android": "react-native run-android --variant debug",
+    "ios": "react-native run-ios"
+  },
+  "dependencies": {
+    "react": "18.2.0",
+    "react-native": "0.73.6",
+    "@react-navigation/native": "^6.1.9",
+    "@react-navigation/native-stack": "^6.9.17",
+    "react-native-safe-area-context": "4.8.2",
+    "react-native-screens": "3.29.0",
+    "react-native-webview": "13.6.4",
+    "@react-native-async-storage/async-storage": "1.23.1",
+    "react-native-image-picker": "7.0.0"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.24.0",
+    "@babel/runtime": "^7.24.0",
+    "react-test-renderer": "18.2.0"
+  }
+}

@@ -1,0 +1,1449 @@
+development of the JIADA Land Allotment MIS inside the existing JIADA app. It is based on the SOP workflow, role hierarchy, timelines, bidding rules, payment rules, and annexure fee/category logic.
+
+1. System objective
+
+Build a complete Land Allotment MIS module inside the existing JIADA application for:
+
+plot notification and publication
+online application filing
+document upload and scrutiny
+role-based internal processing
+objection and clarification cycle
+single-applicant allotment flow
+multi-applicant bidding flow
+premium payment tracking
+possession handover
+land registry initiation
+reporting and audit trail
+
+The process must support the SOP timeline of 75 days from notification of vacant plot to possession, with role-based movement through Counter Clerk, IEO, DO/RDD, and RD.
+
+2. Main actors / user roles
+
+As per SOP roles and practical system need, use these users:
+
+External users
+Applicant
+Consortium Lead Applicant
+Consortium Member optional view only
+Bidder same applicant account
+Payment/Finance Viewer optional
+Internal users
+Super Admin
+Regional Office Admin
+Counter Clerk (CC)
+Industrial Extension Officer (IEO)
+Development Officer / Regional Development Officer (DO/RDD)
+Regional Director (RD)
+PCC Secretariat User
+LAC Secretariat User
+Inspection Officer
+Accounts/Payment Verification User
+Possession Officer
+Registry/BPAMS Coordination User
+Report Viewer / Management
+
+The role movement must reflect the SOP role actions like verify, object, forward, inspect, revert, approve, reject.
+
+3. Core modules
+Module A. Master Setup
+region master
+district master
+block master
+industrial area master
+plot master
+land category master A/B/C
+sector type master production/service/commercial
+applicant type master
+document type master
+fee rule master
+workflow stage master
+notification template master
+payment head master
+reservation rule master
+Module B. Plot Notification
+create notification
+attach plots to notification
+publish/unpublish
+corrigendum
+withdrawn plot with speaking order
+archive old notifications
+Module C. Application Management
+applicant registration/login
+create application
+applicant profile
+project details
+land requirement
+sector details
+financial plan
+document upload
+declaration upload
+final submission
+acknowledgement
+Module D. Scrutiny & Workflow
+inward receipt
+document verification
+deficiency / objection
+clarification
+site inspection
+PCC review
+LAC recommendation
+RD decision
+approve / reject / send for bidding
+Module E. Bidding
+identify multi-applicant plots
+generate bid event
+notify bidders
+EMD collection
+closed bid entry
+bid opening
+tie handling by lottery
+highest bidder selection
+reserve second highest bidder
+provisional allotment order
+Module F. Allotment & Payment
+allotment order generation
+premium demand generation
+premium payment tracking
+cancellation on non-payment
+second-highest bidder reissue
+installment support if needed by rule
+indemnity bond tracking
+Module G. Possession & Registry
+possession checklist
+possession letter
+possession handover date
+CTE received status
+construction permit status
+registry initiation
+lease deed execution
+post-allotment service links
+Module H. Communication
+SMS
+email
+dashboard alerts
+internal notifications
+timeline reminders
+escalation alerts
+Module I. Reports & Dashboard
+application summary
+plot-wise status
+role-wise pending cases
+timeline breach report
+objection report
+bidding report
+payment report
+allotment and possession report
+district/block/category-wise analytics
+Module J. Audit & Logs
+every action log
+field change log
+workflow log
+payment log
+notification log
+document version log
+4. End-to-end business flow
+4.1 Plot notification flow
+Admin creates plot inventory.
+Admin marks plot vacant and available.
+Notification created for selected plots.
+Notification published on portal for 15 days.
+Corrigendum can be issued.
+Plot may be withdrawn by speaking order.
+4.2 Applicant application flow
+Applicant registers.
+Applicant chooses region / industrial area / plot.
+System checks whether plot is open in active notification.
+Applicant fills full application.
+Applicant uploads mandatory documents.
+System calculates processing fee based on:
+category A/B/C
+land size slab
+Applicant pays scrutiny / processing fee online.
+Application submitted and locked.
+4.3 Scrutiny flow
+CC verifies completeness.
+IEO examines details.
+DO/RDD inspects/evaluates.
+PCC/LAC recommendation captured.
+RD decides:
+approve
+reject
+raise objection
+mark for bidding if more than one applicant for same plot
+4.4 Single applicant flow
+Eligible single applicant passes scrutiny.
+RD issues allotment order.
+Applicant pays full premium within 30 days.
+Physical possession within 10 days of payment.
+Registry initiated after CTE and construction permit/BPAMS.
+4.5 Multi applicant bidding flow
+System detects more than one valid applicant for same plot.
+Closed bidding event created.
+Bid date notified at least 10 days in advance.
+Floor price = prevailing allotment rate.
+EMD = max(10% of floor price, 150000).
+Only cleared applicants can bid.
+Highest bidder selected.
+Tie => lottery.
+EMD of non-selected bidders refunded.
+Second-highest bidder kept reserved.
+Highest bidder pays full premium within 30 days.
+If failed, allotment cancelled, EMD forfeited, second-highest bidder gets offer.
+5. Application statuses
+
+Use a centralized status engine.
+
+Draft and filing
+DRAFT
+PAYMENT_PENDING
+PAYMENT_SUCCESS
+SUBMITTED
+UNDER_PRELIMINARY_SCRUTINY
+Scrutiny
+DEFICIENCY_RAISED
+CLARIFICATION_SUBMITTED
+UNDER_IEO_REVIEW
+UNDER_DO_REVIEW
+INSPECTION_PENDING
+INSPECTION_COMPLETED
+PCC_PENDING
+LAC_RECOMMENDED
+RD_PENDING
+APPROVED_FOR_ALLOTMENT
+REJECTED
+NON_ENTERTAINED
+Bidding
+APPROVED_FOR_BIDDING
+BID_NOTICE_PUBLISHED
+EMD_PENDING
+BID_ELIGIBLE
+BID_SUBMITTED
+BID_OPENED
+HIGHEST_BIDDER_SELECTED
+SECOND_HIGHEST_RESERVED
+LOTTERY_REQUIRED
+LOTTERY_COMPLETED
+Allotment
+PROVISIONAL_ALLOTMENT_ISSUED
+PREMIUM_PENDING
+PREMIUM_PARTIAL
+PREMIUM_PAID
+ALLOTMENT_CANCELLED
+REALLOTTED_TO_SECOND_BIDDER
+Post-allotment
+POSSESSION_PENDING
+POSSESSION_GRANTED
+CTE_PENDING
+CONSTRUCTION_PERMIT_PENDING
+REGISTRY_INITIATED
+LEASE_EXECUTED
+CLOSED
+6. Database schema design
+
+Below is a recommended relational design for MySQL.
+
+6.1 User and auth tables
+users
+id PK
+name
+email
+mobile
+password_hash
+user_type enum('applicant','employee','admin')
+is_active
+created_at
+updated_at
+roles
+id PK
+role_code
+role_name
+user_roles
+id PK
+user_id FK users.id
+role_id FK roles.id
+region_id nullable
+office_id nullable
+assigned_at
+permissions
+id PK
+permission_code
+permission_name
+role_permissions
+id PK
+role_id
+permission_id
+6.2 Master data tables
+regions
+id PK
+region_name
+region_code
+is_active
+districts
+id PK
+district_name
+district_code
+is_active
+blocks
+id PK
+district_id FK
+block_name
+block_code
+is_active
+land_categories
+id PK
+category_code enum('A','B','C')
+category_name
+description
+block_land_categories
+
+Maps block to A/B/C based on annexure.
+
+id PK
+district_id
+block_id
+land_category_id
+effective_from
+effective_to nullable
+is_active
+industrial_areas
+id PK
+region_id
+district_id
+block_id
+industrial_area_name
+industrial_area_code
+land_price_per_unit
+unit_type enum('acre','sqft','sqm')
+is_new_area tinyint
+is_active
+sector_types
+id PK
+sector_code enum('production','service','commercial')
+sector_name
+applicant_types
+id PK
+applicant_type_code
+applicant_type_name
+Examples: individual, proprietorship, partnership, llp, pvt_ltd, public_ltd, govt_company, psu, huf, society, trust, consortium
+document_types
+id PK
+document_code
+document_name
+applicant_type_id nullable
+is_mandatory
+sequence_no
+allowed_extensions
+max_size_mb
+remarks
+reservation_rules
+id PK
+rule_code
+rule_name
+percentage_or_flag
+applicability
+effective_from
+effective_to
+remarks
+
+Examples:
+
+MSME_40_PERCENT
+LAND_LOSER_10_PERCENT_3_YEARS
+fee_rules
+id PK
+land_category_id
+min_acre
+max_acre nullable
+processing_fee
+effective_from
+effective_to
+is_active
+sector_pricing_rules
+id PK
+land_category_id
+sector_type_id
+pricing_formula_type enum('base','percent_more','times')
+pricing_value
+remarks
+
+Examples from annexure:
+
+A + production = base
+A + service = 25% more
+A + commercial = 10 times
+B + service = 17% more
+C + service = 7% more etc.
+6.3 Plot inventory tables
+plots
+id PK
+industrial_area_id
+plot_no
+plot_name nullable
+plot_area_acre
+plot_area_sqft nullable
+plot_type
+plot_status enum('vacant','reserved','allotted','under_notification','withdrawn','inactive')
+current_allotment_id nullable
+latitude nullable
+longitude nullable
+gis_url nullable
+master_plan_url nullable
+infrastructure_notes nullable
+remarks
+created_at
+updated_at
+plot_status_history
+id PK
+plot_id
+old_status
+new_status
+reason
+order_document_id nullable
+changed_by
+changed_at
+6.4 Notification tables
+plot_notifications
+id PK
+notification_no
+notification_title
+publish_date
+application_start_date
+application_end_date
+bid_possible_flag
+status enum('draft','published','closed','corrigendum_issued','cancelled')
+public_notice_doc_id nullable
+created_by
+created_at
+plot_notification_details
+id PK
+notification_id
+plot_id
+floor_price
+is_withdrawn
+withdrawn_reason
+withdrawn_order_doc_id nullable
+notification_corrigenda
+id PK
+notification_id
+corrigendum_no
+corrigendum_date
+description
+corrigendum_doc_id
+created_by
+6.5 Applicant profile tables
+applicant_profiles
+id PK
+user_id
+applicant_type_id
+legal_name
+trade_name nullable
+pan_no
+gst_no nullable
+udyam_no nullable
+incorporation_no nullable
+registration_no nullable
+date_of_incorporation nullable
+constitution_details
+address_line1
+address_line2
+state
+district
+pincode
+email
+mobile
+photo_doc_id nullable
+is_blacklisted
+created_at
+updated_at
+applicant_directors_partners
+id PK
+applicant_profile_id
+person_name
+designation
+father_name nullable
+mobile
+email nullable
+address
+id_proof_type
+id_proof_no
+photo_doc_id nullable
+consortiums
+id PK
+consortium_name
+lead_applicant_profile_id
+mou_doc_id
+spv_required tinyint
+spv_formed tinyint
+spv_name nullable
+spv_registration_no nullable
+created_at
+consortium_members
+id PK
+consortium_id
+applicant_profile_id
+member_role
+shareholding_percent
+is_lead tinyint
+6.6 Application tables
+land_applications
+id PK
+application_no
+notification_id
+plot_id
+user_id
+applicant_profile_id
+consortium_id nullable
+applicant_type_id
+sector_type_id
+project_title
+project_description
+requested_land_area_acre
+land_use_pattern
+employment_generation
+total_project_cost
+own_funds
+term_loan
+working_capital
+environmental_plan
+infrastructure_requirement
+existing_unit_details
+land_loser_flag
+msme_flag
+startup_flag
+priority_flag
+block_id
+district_id
+industrial_area_id
+land_category_id
+processing_fee_amount
+current_status
+submission_date nullable
+final_submission_flag
+non_entertainment_reason nullable
+created_at
+updated_at
+application_project_details
+id PK
+application_id
+raw_material_details
+machinery_details
+manufacturing_process
+finished_product_details
+financial_planning
+additional_project_info
+application_financials
+id PK
+application_id
+land_cost
+development_fee
+processing_fee
+other_charges
+total_payable
+premium_amount
+emd_amount nullable
+calculation_json
+calculated_at
+application_documents
+id PK
+application_id
+document_type_id
+file_name
+file_path
+file_extension
+file_size
+uploaded_by
+uploaded_at
+is_verified
+verified_by nullable
+verified_at nullable
+reject_reason nullable
+version_no default 1
+application_declarations
+id PK
+application_id
+declaration_text
+stamp_paper_no
+execution_date
+witness1_name
+witness2_name
+declaration_doc_id
+6.7 Payment tables
+payments
+id PK
+application_id nullable
+bid_id nullable
+payment_purpose enum('processing_fee','emd','premium','installment','other')
+transaction_ref_no
+gateway_order_id nullable
+gateway_payment_id nullable
+amount
+payment_date
+payment_status enum('initiated','success','failed','pending','refunded','forfeited')
+receipt_no nullable
+receipt_file nullable
+payer_name
+remarks
+created_at
+payment_refunds
+id PK
+payment_id
+refund_amount
+refund_date
+refund_ref_no
+refund_reason
+refund_status
+6.8 Workflow tables
+workflow_stages
+id PK
+stage_code
+stage_name
+sequence_no
+role_owner
+timeline_days
+is_active
+application_workflow
+id PK
+application_id
+current_stage_id
+assigned_to_user_id nullable
+assigned_role_id
+start_date
+due_date
+completed_date nullable
+status enum('pending','in_progress','completed','reverted','rejected')
+remarks nullable
+workflow_actions
+id PK
+application_id
+stage_id
+action_by
+action_role_id
+action_type enum('verify','object','clarification','forward','revert','inspect','recommend','approve','reject','system')
+from_stage_id nullable
+to_stage_id nullable
+action_note
+attachment_id nullable
+action_at
+application_objections
+id PK
+application_id
+raised_by
+raised_role_id
+objection_text
+objection_date
+due_date
+status enum('open','clarified','closed','reopened')
+closed_by nullable
+closed_at nullable
+application_clarifications
+id PK
+objection_id
+application_id
+submitted_by
+clarification_text
+clarification_doc_id nullable
+submitted_at
+accepted_flag nullable
+accepted_by nullable
+accepted_at nullable
+inspections
+id PK
+application_id
+inspection_assigned_to
+inspection_date
+inspection_status enum('pending','completed','rescheduled')
+findings
+report_doc_id nullable
+geo_lat nullable
+geo_long nullable
+created_at
+committee_reviews
+id PK
+application_id
+committee_type enum('PCC','LAC')
+meeting_date
+decision enum('recommended','not_recommended','deferred')
+remarks
+minutes_doc_id nullable
+created_by
+6.9 Bidding tables
+bid_events
+id PK
+notification_id
+plot_id
+bid_event_no
+bid_notice_date
+bid_date
+floor_price
+emd_amount
+tie_break_method enum('lottery')
+status enum('draft','published','closed','cancelled','completed')
+created_by
+bid_eligible_applicants
+id PK
+bid_event_id
+application_id
+applicant_profile_id
+emd_payment_id nullable
+is_eligible
+eligibility_remarks
+bids
+id PK
+bid_event_id
+application_id
+applicant_profile_id
+bid_amount
+bid_submitted_at
+is_valid
+is_opened
+opened_at nullable
+bid_results
+id PK
+bid_event_id
+highest_bid_application_id
+highest_bid_amount
+second_highest_application_id nullable
+second_highest_amount nullable
+tie_flag
+lottery_conducted_flag
+result_declared_at
+approved_by
+lottery_logs
+id PK
+bid_event_id
+application_ids_json
+conducted_by
+conducted_at
+result_application_id
+video_doc_id nullable
+remarks
+6.10 Allotment and possession tables
+allotments
+id PK
+application_id
+plot_id
+allotment_type enum('single_applicant','highest_bidder','second_highest_bidder')
+provisional_order_no
+provisional_order_date
+order_doc_id nullable
+premium_amount
+emd_adjusted_amount default 0
+net_payable_amount
+payment_due_date
+status enum('provisional','premium_pending','premium_paid','cancelled','finalized')
+created_by
+allotment_cancellations
+id PK
+allotment_id
+cancellation_date
+reason
+emd_forfeited_flag
+cancellation_order_no
+cancellation_doc_id
+created_by
+premium_payments
+id PK
+allotment_id
+payment_id
+amount
+adjusted_emd_amount
+balance_amount
+payment_status
+possessions
+id PK
+allotment_id
+possession_letter_no
+possession_letter_date
+possession_date
+possession_officer_id
+possession_doc_id nullable
+remarks
+registry_process
+id PK
+allotment_id
+cte_received_flag
+cte_doc_id nullable
+construction_permit_applied_flag
+construction_permit_no nullable
+bpams_reference_no nullable
+registry_initiated_date nullable
+lease_deed_no nullable
+lease_deed_date nullable
+lease_start_date nullable
+lease_end_date nullable
+annual_rent
+renewal_option_flag default 1
+status enum('pending_cte','pending_construction_permit','registry_initiated','lease_executed')
+6.11 Communication and audit tables
+notifications_log
+id PK
+application_id nullable
+user_id
+channel enum('sms','email','dashboard')
+template_code
+subject nullable
+message_body
+sent_status
+sent_at
+response_log nullable
+system_audit_logs
+id PK
+module_name
+entity_name
+entity_id
+action_type
+old_data_json
+new_data_json
+action_by
+action_ip
+action_at
+timeline_breaches
+id PK
+application_id
+stage_id
+due_date
+breached_on
+breached_days
+escalated_to
+closed_flag
+7. Important business rules
+7.1 Plot availability rules
+A plot can be applied for only if:
+linked to active notification
+within application date
+not withdrawn
+not already finally allotted
+7.2 Separate application per plot
+
+The SOP says separate application form is required for each industrial plot. So system should not allow one application for multiple plots.
+
+7.3 Applicant name change not allowed
+
+Once application is submitted, legal applicant name cannot be changed. Only correction workflow by admin note may exist without changing principal identity.
+
+7.4 Mandatory document enforcement
+
+System should block final submission until all required documents for that applicant type are uploaded.
+
+7.5 Non-entertainment rule
+
+If required information/documents are not submitted, application can be marked NON_ENTERTAINED and plot proceeds to other applicants.
+
+7.6 Processing fee logic
+
+As per annexure and fee table:
+
+Category A
+up to 1 acre = 10000
+
+1 and up to 3 acre = 25000
+
+3 acre = 50000
+
+Category B
+up to 1 acre = 7500
+
+1 and up to 3 acre = 17500
+
+3 acre = 37500
+
+Category C
+up to 1 acre = 5000
+
+1 and up to 3 acre = 12000
+
+3 acre = 25000
+
+7.7 Land price logic
+
+Based on annexure:
+
+Production = base land price
+Service = category-wise percentage increase
+Commercial = category-wise multiple of base price
+7.8 Reservation logic
+
+System should flag priority or reserved eligibility:
+
+40% reservation for micro/small enterprises
+10% land in new industrial area for land losers for 3 years, if eligible
+
+Do not auto-allot only on this basis. Keep it as decision-support flag unless authority wants strict automated enforcement.
+
+7.9 Workflow role logic
+
+Suggested SOP mapping:
+
+CC = receipt + document verification + objection
+IEO = scrutiny + recommendation + clarification review
+DO/RDD = deeper review + inspection + remarks
+RD = final approval/rejection/revert/order issuance
+7.10 Timeline logic
+
+System should calculate due dates:
+
+overall process = 75 days from plot notification
+premium payment = 30 days from allotment/provisional order
+possession = 10 days after full premium payment
+bid notice lead time = at least 10 days before bid date
+7.11 Bidding eligibility
+
+Only applicants whose projects are scrutinized and cleared should enter bid stage.
+
+7.12 EMD calculation
+
+EMD = max(floor_price * 0.10, 150000)
+
+7.13 Highest bidder failure
+
+If highest bidder does not pay in 30 days:
+
+provisional allotment withdrawn
+EMD forfeited
+second highest bidder offered allotment
+7.14 Registry dependency
+
+Registry process starts only after:
+
+Consent to Establish received
+construction permit applied through BPAMS / linked process
+8. Fee calculation logic
+8.1 Category determination
+
+Use:
+district + block -> land category A/B/C
+
+8.2 Industrial area pricing
+
+Each industrial area stores base land price.
+
+8.3 Sector price logic
+
+Pseudo logic:
+
+function calculateLandRate($baseRate, $category, $sector) {
+    if ($sector == 'production') return $baseRate;
+
+    if ($category == 'A' && $sector == 'service') return $baseRate * 1.25;
+    if ($category == 'A' && $sector == 'commercial') return $baseRate * 10;
+
+    if ($category == 'B' && $sector == 'service') return $baseRate * 1.17;
+    if ($category == 'B' && $sector == 'commercial') return $baseRate * 7.5;
+
+    if ($category == 'C' && $sector == 'service') return $baseRate * 1.07;
+    if ($category == 'C' && $sector == 'commercial') return $baseRate * 2;
+}
+8.4 Processing fee logic
+
+Pseudo:
+
+function calculateProcessingFee($category, $acre) {
+    if ($category == 'A') {
+        if ($acre <= 1) return 10000;
+        if ($acre <= 3) return 25000;
+        return 50000;
+    }
+    if ($category == 'B') {
+        if ($acre <= 1) return 7500;
+        if ($acre <= 3) return 17500;
+        return 37500;
+    }
+    if ($category == 'C') {
+        if ($acre <= 1) return 5000;
+        if ($acre <= 3) return 12000;
+        return 25000;
+    }
+}
+9. UI / screen list
+9.1 Public screens
+Land allotment home
+Active plot notifications
+Plot search
+GIS / master plan view link
+Notification details page
+Public corrigendum list
+Public bid notices
+Public results page
+9.2 Applicant screens
+Login / registration
+Dashboard
+My profile
+My applicant constitution details
+Add directors/partners/promoters
+Add consortium members
+Land application create
+Select notification and plot
+Project details form
+Financial details form
+Land use and environment form
+Upload documents page
+Declaration details page
+Fee calculation summary
+Payment page
+Final preview
+Submit application
+Track application
+View objections
+Submit clarification
+Bid participation page
+EMD payment page
+Bid submission page
+Premium payment page
+Download allotment letter
+Download possession letter
+Registry status page
+Communication inbox
+9.3 Internal admin screens
+Dashboard by role
+Master data setup
+Plot inventory management
+Plot notification create/edit/publish
+Corrigendum management
+Withdrawal order upload
+Application inbox
+Scrutiny detail screen
+Document verification screen
+Raise objection modal
+Clarification review screen
+Inspection assignment
+Inspection report upload
+PCC review entry
+LAC review entry
+RD approval screen
+Bid event create
+Bid opening screen
+Lottery screen
+Bid result finalization
+Allotment order generation
+Premium due monitoring
+Cancellation / reissue screen
+Possession handover screen
+Registry tracking
+Notification log
+Timeline breach report
+MIS reports
+Audit log viewer
+10. Form-wise UI fields
+10.1 Application form sections
+Section 1: Plot selection
+notification
+region
+district
+block
+industrial area
+plot no
+plot area
+base price
+category A/B/C
+sector type
+requested area
+Section 2: Applicant info
+applicant type
+legal name
+PAN
+GST
+Udyam
+address
+email
+mobile
+Section 3: Constitution details
+incorporation/registration no
+date
+board/partner/member details
+Section 4: Existing units
+existing unit name
+location
+industrial area flag
+capacity
+status
+Section 5: Project details
+project title
+project description
+raw materials
+machinery
+process flow
+finished products
+employment generation
+Section 6: Finance
+project cost
+own contribution
+loan
+working capital
+funding source
+Section 7: Land use
+built-up area
+open area
+green area
+utility area
+future expansion
+Section 8: Environment & infrastructure
+water
+power
+drainage
+waste plan
+pollution category
+environment management plan
+Section 9: Eligibility flags
+MSME
+land loser
+startup
+women entrepreneur
+special preference category if any
+Section 10: Uploads
+
+dynamic by applicant type
+
+Section 11: Declaration
+undertaking checkbox
+witness details
+upload stamped declaration
+11. Dashboard design
+Applicant dashboard
+
+Cards:
+
+total applications
+under scrutiny
+objections pending
+bid pending
+premium pending
+possession received
+
+Table:
+
+application no
+plot
+status
+last action
+next due date
+action button
+CC dashboard
+new submissions
+document incomplete
+objection due
+overdue cases
+IEO dashboard
+under scrutiny
+clarification review
+inspection recommendation pending
+DO/RDD dashboard
+inspection pending
+review pending
+reverted from RD
+RD dashboard
+approval pending
+bid approval pending
+allotment order pending
+timeline breach cases
+Management dashboard
+plots notified
+applications received
+single-applicant cases
+bidding cases
+allotments made
+revenue expected
+revenue received
+possession granted
+district-wise map/summary
+12. Workflow engine design
+
+Use generic workflow tables so future JIADA services can reuse it.
+
+Stage recommendation
+Application Submitted
+CC Verification
+IEO Scrutiny
+DO/RDD Review
+Inspection
+PCC/LAC Recommendation
+RD Decision
+Bidding if needed
+Allotment
+Premium Payment
+Possession
+Registry
+Action buttons by role
+CC
+verify documents
+raise objection
+forward to IEO
+non-entertain
+IEO
+review
+recommend inspection
+raise objection
+forward to DO
+revert to CC
+DO/RDD
+inspect
+upload inspection
+recommend
+raise objection
+revert to IEO
+forward to RD
+RD
+approve
+reject
+send back to DO
+send back to IEO
+mark for bidding
+issue allotment order
+13. Document checklist logic
+
+Dynamic by applicant type.
+
+Common documents
+project report / DPR
+raw material details
+machinery details
+process flow chart
+finished products details
+financial plan
+declaration undertaking
+identity proof
+address proof
+photographs
+Company
+certificate of incorporation
+MOA
+AOA
+director profiles
+Proprietorship
+shop & establishment registration
+proprietor profile
+Partnership / LLP
+partnership deed / LLP registration
+partner profiles
+HUF
+Karta proof
+Society / Trust
+registration certificate
+trust deed / society bylaws
+Consortium
+notarized MoU
+lead member authorization
+SPV undertaking details
+
+The system should auto-show checklist based on applicant type.
+
+14. Validation rules
+mobile unique per user
+email verified
+PAN format validation
+GST format validation
+area cannot exceed plot area
+one application per plot per applicant in same notification
+separate application for each plot
+required docs mandatory
+payment required before final submit
+once submitted, critical data locked
+bid amount must be greater than or equal to floor price
+bid only allowed before closing time
+premium payment not accepted after cancellation unless reactivated by admin
+15. Notifications to send
+Applicant alerts
+registration success
+application saved
+payment success
+application submitted
+objection raised
+clarification received
+bid notice published
+EMD received
+bid result declared
+provisional allotment issued
+premium due reminder
+premium received
+possession date scheduled
+possession granted
+registry pending due to CTE / construction permit
+Internal alerts
+new application assigned
+clarification submitted
+inspection pending
+timeline due tomorrow
+stage overdue
+bid opening date today
+premium payment overdue
+possession pending beyond 10 days
+
+The SOP repeatedly mentions SMS, email, and dashboard communication, so this must be built into workflow events.
+
+16. Reports to build
+notification-wise applications
+plot-wise applicant count
+single vs multiple applicant report
+objection pending report
+role-wise pending report
+timeline breach report
+category A/B/C fee collection report
+EMD received/refunded/forfeited report
+premium due and paid report
+allotment order register
+possession register
+registry status report
+MSME reserved category report
+land loser category report
+district/block/industrial area analytics
+audit trail report
+17. Suggested menu structure
+Admin
+Dashboard
+Masters
+Plot Inventory
+Plot Notifications
+Applications
+Bidding
+Allotments
+Possession
+Registry
+Reports
+Audit Logs
+Applicant
+Dashboard
+My Profile
+My Applications
+New Application
+Payments
+Bidding
+Documents
+Communications
+Registry Status
+19. Suggested key helper logic
+19.1 FeeCalculationService
+detect land category by block
+get industrial area base price
+compute sector price
+compute processing fee
+compute premium
+compute EMD
+19.2 WorkflowService
+move application between roles
+set due dates
+create timeline logs
+send notifications
+maintain audit
+19.3 BidService
+create bid event
+validate eligible applicants
+accept EMD
+accept sealed bid
+open bids
+detect tie
+run lottery
+declare result
+handle second-highest reserve
+19.4 PaymentService
+capture online payment
+verify callback
+generate receipt
+update status
+refund / forfeit EMD
+20. Recommended indexes
+
+Add indexes on:
+
+application_no
+notification_id
+plot_id
+user_id
+applicant_profile_id
+current_status
+payment_status
+transaction_ref_no
+bid_event_id
+industrial_area_id
+district_id
+block_id
+land_category_id
+publish_date
+due_date
+
+Composite indexes:
+
+land_applications (plot_id, notification_id, current_status)
+plots (industrial_area_id, plot_status)
+payments (application_id, payment_purpose, payment_status)
+bids (bid_event_id, application_id)
+application_workflow (application_id, current_stage_id, status)
+21. Security and control points
+role-based access control
+CSRF protection
+file upload validation
+file type whitelist PDF/JPG/PNG
+max file size control
+OTP/email verification for applicants
+action-based audit log
+no direct URL file access
+encrypted payment callback verification
+server-side validation for all form fields
+bid secrecy until opening time
+no bid edit after final submit
+timestamp-based locking
+22. Special cases to support
+plot withdrawn after notification
+corrigendum issued after publication
+application returned for clarification multiple times
+consortium applicant with SPV pending
+tie in highest bid
+successful bidder fails premium payment
+second bidder activated
+premium paid after partial delay by admin extension, if policy permits
+possession delayed
+registry pending due to CTE or construction permit
+direct allotment on High Power Committee recommendation, if authority later wants that exception flow because SOP mentions exemption in specific cases
+23. Minimum viable version vs full version
+Phase 1 MVP
+masters
+plot inventory
+plot notification
+applicant registration
+application form
+document upload
+fee calculation
+processing fee payment
+scrutiny workflow
+objection/clarification
+allotment order
+premium payment
+possession
+Phase 2
+bidding module
+refund/forfeit EMD
+lottery
+advanced reports
+registry integration tracking
+BPAMS linkage
+dashboard analytics
+Phase 3
+GIS integration
+SWS sync APIs
+SMS/email gateway
+digital signatures
+QR-coded letters
+SLA escalation automation
+24. Codex-ready build instruction
+
+You can pass this directly:
+
+Build a Land Allotment MIS module inside existing JIADA Core PHP app using MySQL. Follow role-based workflow for applicant, CC, IEO, DO/RDD, RD. Implement plot notification, application filing, document checklist, payment, scrutiny, objections, clarifications, bidding for multiple applicants, provisional allotment, premium payment, possession, and registry tracking. Use master tables for region, district, block, industrial area, land category A/B/C, sector type, fee rules, pricing rules, document types, and workflow stages. Implement status-based workflow and audit logs. Use separate tables for applications, documents, payments, workflow, inspections, committee reviews, bid events, bids, bid results, allotments, possessions, and registry. Add dashboards and reports for all roles. Use dynamic fee calculation from block category and sector pricing. Use EMD rule max(10% floor price, 150000). Use timeline alerts for 75 days overall, 30 days premium payment, and 10 days possession.
+
+
+Build a complete Land Allotment MIS module inside the existing JIADA Core PHP application using MySQL, phpMyAdmin-compatible schema, and XAMPP environment. Use the schema and logic exactly as defined below:
+
+Create all master, transaction, workflow, bidding, allotment, possession, registry, communication, and audit tables.
+Use role-based workflow for CC, IEO, DO/RDD, RD, Accounts, Possession Officer, and Registry Officer.
+Build applicant-side multi-step application wizard with save draft, document upload, fee calculation, online payment, final submit, and tracking.
+Enforce one application per plot per notification per applicant.
+Enforce no applicant name change after final submission.
+Implement processing fee calculation by land category and requested land acreage.
+Implement sector-based land pricing formula using industrial area base rate plus category-wise service/commercial formula.
+Implement multi-applicant closed bidding flow with EMD = max(10% of floor price, 150000), tie resolution through lottery, highest bidder selection, second-highest reserve, premium due date, and default handling.
+Implement allotment order generation, premium tracking, possession generation, and registry dependency on CTE and construction permit.
+Maintain full workflow history, objection/clarification history, payment logs, notification logs, and audit logs.
+Add dashboards and reports for applicant and admin roles.
+Create service classes: FeeCalculationService, WorkflowService, BidService, PaymentService, NotificationService, AuditService.
+Add cron scripts for premium due reminder, highest bidder cancellation, possession delay, and SLA breach detection.
+Keep code modular in controllers, models, services, helpers, and views.
+Use Bootstrap-based responsive UI, server-side validation, CSRF protection, role-based access control, and secure file uploads.
