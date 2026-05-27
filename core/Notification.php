@@ -319,6 +319,10 @@ class Notification {
      */
     private static function queueNotification($notificationId, $type, $userId, $subject, $message, $data) {
         try {
+            if (!class_exists('Redis')) {
+                logError("Redis extension not available; skipping notification queue");
+                return;
+            }
             $redis = new Redis();
             $redis->connect(REDIS_HOST, REDIS_PORT);
             
@@ -337,7 +341,7 @@ class Notification {
             
             $redis->close();
             
-        } catch (Exception $e) {
+        } catch (Throwable $e) {
             logError("Redis queue failed: " . $e->getMessage());
         }
     }
@@ -357,6 +361,10 @@ class Notification {
      */
     public static function processQueue() {
         try {
+            if (!class_exists('Redis')) {
+                logError("Redis extension not available; queue processing skipped");
+                return;
+            }
             $redis = new Redis();
             $redis->connect(REDIS_HOST, REDIS_PORT);
             
@@ -393,7 +401,7 @@ class Notification {
             
             $redis->close();
             
-        } catch (Exception $e) {
+        } catch (Throwable $e) {
             logError("Queue processing failed: " . $e->getMessage());
         }
     }

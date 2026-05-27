@@ -26,7 +26,7 @@ switch ($page) {
             $password = $_POST['password'] ?? '';
             
             $db = getDB();
-            $user = $db->fetchOne("SELECT * FROM users WHERE (email = ? OR mobile = ?) AND user_type IN ('superadmin', 'admin', 'jiada_officer', 'regional_officer')", [$email, $email]);
+            $user = $db->fetchOne("SELECT * FROM users WHERE (email = ? OR mobile = ?) AND user_type IN ('superadmin', 'admin', 'jiada_officer', 'regional_officer', 'rd', 'counter_clerk', 'ieo')", [$email, $email]);
             
             if (!$user) {
                 $error = 'Invalid credentials. User not found.';

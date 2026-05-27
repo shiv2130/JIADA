@@ -8,14 +8,80 @@ if (!isset($_SESSION['admin_id'])) { header('Location: ' . APP_URL . '/admin/?pa
 
 $db = getDB();
 $sessionRole = strtolower(trim((string)($_SESSION['user_type'] ?? 'admin')));
+$sessionRegionId = !empty($_SESSION['region_id']) ? (int) $_SESSION['region_id'] : 0;
+$sessionAdminId = (int) ($_SESSION['admin_id'] ?? 0);
+$isCounterClerk = in_array($sessionRole, ['counter_clerk', 'cc'], true);
+$isIeo = in_array($sessionRole, ['ieo', 'industrial_extension_officer'], true);
+$isRd = in_array($sessionRole, ['rd', 'regional_director', 'authority'], true);
+
+function resolveNextOfficerId($db, int $applicationRegionId, array $roleOptions, int $preferredId = 0): int {
+    if ($preferredId > 0) {
+        return $preferredId;
+    }
+    if (empty($roleOptions)) {
+        return 0;
+    }
+    $placeholders = implode(',', array_fill(0, count($roleOptions), '?'));
+    $params = $roleOptions;
+    $sql = "SELECT id FROM users WHERE status = 'active' AND user_type IN ($placeholders)";
+    if ($applicationRegionId > 0) {
+        $sql .= " AND region_id = ?";
+        $params[] = $applicationRegionId;
+    }
+    $sql .= " ORDER BY id ASC LIMIT 1";
+    $officer = $db->fetchOne($sql, $params);
+    return !empty($officer['id']) ? (int) $officer['id'] : 0;
+}
+
+function persistInspectionArtifacts($db, int $applicationId, string $inspectionDate, string $inspectionReportText, array $inspectionFile, int $actionBy): array {
+    $inspectionDate = trim($inspectionDate);
+    $inspectionReportText = trim($inspectionReportText);
+    $hasFile = !empty($inspectionFile['name']);
+
+    if ($inspectionDate === '' && $inspectionReportText === '' && !$hasFile) {
+        return ['success' => true, 'saved' => false, 'note' => ''];
+    }
+
+    $notes = [];
+    if ($inspectionDate !== '') {
+        $notes[] = 'Inspection date: ' . $inspectionDate;
+    }
+    if ($inspectionReportText !== '') {
+        $notes[] = $inspectionReportText;
+    }
+
+    if ($hasFile) {
+        $fileResult = uploadFile($inspectionFile, UPLOADS_PATH . '/inspection-reports');
+        if (!$fileResult['success']) {
+            return ['success' => false, 'message' => $fileResult['message'] ?? 'Inspection report upload failed'];
+        }
+
+        $db->insert('la_application_documents', [
+            'application_id' => $applicationId,
+            'document_code' => 'inspection_report',
+            'document_name' => 'Inspection Report',
+            'file_name' => $fileResult['filename'] ?? '',
+            'file_path' => $fileResult['path'] ?? '',
+            'uploaded_at' => date('Y-m-d H:i:s')
+        ]);
+        $notes[] = 'Inspection report file uploaded';
+    }
+
+    $combinedNote = trim(implode(' | ', array_filter($notes)));
+    if ($combinedNote !== '') {
+        WorkflowService::logAction($applicationId, 'INSPECTION_REPORT_SUBMITTED', 'inspection', $actionBy, $combinedNote);
+    }
+
+    return ['success' => true, 'saved' => true, 'note' => $combinedNote];
+}
 
 function canPerformAppAction(string $role, string $action): bool {
     $role = strtolower(trim($role));
     if (in_array($role, ['superadmin', 'admin'], true)) return true;
     $cc = ['assign_cc', 'raise_objection', 'forward_ieo'];
-    $ieo = ['raise_objection', 'forward_do'];
+    $ieo = ['raise_objection', 'forward_do', 'submit_inspection_report'];
     $doRole = ['raise_objection', 'forward_rd'];
-    $rd = ['mark_for_bidding', 'approve', 'reject', 'create_bid', 'non_entertain'];
+    $rd = ['raise_objection', 'revert_do', 'revert_ieo', 'mark_for_bidding', 'approve', 'reject', 'create_bid', 'non_entertain'];
 
     if (in_array($role, ['counter_clerk', 'cc'], true)) return in_array($action, $cc, true);
     if (in_array($role, ['ieo', 'industrial_extension_officer'], true)) return in_array($action, $ieo, true);
@@ -36,6 +102,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $assignTo = intval($_POST['assign_to'] ?? 0);
     $remarks = sanitize($_POST['remarks'] ?? '');
     $bidEnd = $_POST['bid_end_date'] ?? '';
+    $inspectionDate = sanitize($_POST['inspection_date'] ?? '');
+    $inspectionReportText = sanitize($_POST['inspection_report_text'] ?? '');
     
     $app = $db->fetchOne("SELECT * FROM land_applications WHERE id = ?", [$appId]);
     if ($app) {
@@ -46,18 +114,95 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_SESSION['flash_success'] = 'Application assigned to CC';
         }
         if ($action === 'forward_ieo') {
+            $nextOfficerId = resolveNextOfficerId($db, (int) ($app['region_id'] ?? 0), ['ieo', 'industrial_extension_officer'], $assignTo);
+            $update = ['scrutiny_remarks' => $remarks ?: 'Forwarded to IEO'];
+            if ($nextOfficerId > 0) {
+                $update['assigned_to'] = $nextOfficerId;
+            }
+            $db->update('land_applications', $update, 'id = ?', [$appId]);
             WorkflowService::moveApplicationStatus($appId, WorkflowService::STATUS_UNDER_IEO_REVIEW, intval($_SESSION['admin_id']), $remarks ?: 'Forwarded to IEO');
             $_SESSION['flash_success'] = 'Forwarded to IEO review';
         }
         if ($action === 'forward_do') {
+            $inspectionResult = persistInspectionArtifacts(
+                $db,
+                $appId,
+                $inspectionDate,
+                $inspectionReportText,
+                $_FILES['inspection_report_file'] ?? [],
+                intval($_SESSION['admin_id'])
+            );
+            if (!$inspectionResult['success']) {
+                $_SESSION['flash_error'] = $inspectionResult['message'] ?? 'Inspection report upload failed';
+                header('Location: ' . APP_URL . '/admin/?page=applications');
+                exit;
+            }
+            $nextOfficerId = resolveNextOfficerId($db, (int) ($app['region_id'] ?? 0), ['do', 'rdd', 'regional_officer', 'jiada_officer'], $assignTo);
+            $update = ['scrutiny_remarks' => $remarks ?: 'Forwarded to DO/RDD'];
+            if ($nextOfficerId > 0) {
+                $update['assigned_to'] = $nextOfficerId;
+            }
+            $db->update('land_applications', $update, 'id = ?', [$appId]);
             WorkflowService::moveApplicationStatus($appId, WorkflowService::STATUS_UNDER_DO_REVIEW, intval($_SESSION['admin_id']), $remarks ?: 'Forwarded to DO/RDD');
             $_SESSION['flash_success'] = 'Forwarded to DO/RDD review';
         }
+        if ($action === 'submit_inspection_report') {
+            if ($inspectionReportText === '' && $inspectionDate === '' && empty($_FILES['inspection_report_file']['name'])) {
+                $_SESSION['flash_error'] = 'Please enter inspection findings or upload an inspection report file';
+            } else {
+                $inspectionResult = persistInspectionArtifacts(
+                    $db,
+                    $appId,
+                    $inspectionDate,
+                    $inspectionReportText,
+                    $_FILES['inspection_report_file'] ?? [],
+                    intval($_SESSION['admin_id'])
+                );
+                if (!$inspectionResult['success']) {
+                    $_SESSION['flash_error'] = $inspectionResult['message'] ?? 'Inspection report upload failed';
+                    header('Location: ' . APP_URL . '/admin/?page=applications');
+                    exit;
+                }
+                if (!empty($inspectionResult['note'])) {
+                    $db->update('land_applications', [
+                        'scrutiny_remarks' => $inspectionResult['note']
+                    ], 'id = ?', [$appId]);
+                }
+                $_SESSION['flash_success'] = 'Inspection report recorded successfully';
+            }
+        }
+        if ($action === 'revert_do') {
+            $nextOfficerId = resolveNextOfficerId($db, (int) ($app['region_id'] ?? 0), ['do', 'rdd', 'regional_officer', 'jiada_officer'], $assignTo);
+            $update = ['scrutiny_remarks' => $remarks ?: 'Reverted back to DO/RDD by RD'];
+            if ($nextOfficerId > 0) {
+                $update['assigned_to'] = $nextOfficerId;
+            }
+            $db->update('land_applications', $update, 'id = ?', [$appId]);
+            WorkflowService::moveApplicationStatus($appId, WorkflowService::STATUS_UNDER_DO_REVIEW, intval($_SESSION['admin_id']), $remarks ?: 'Reverted back to DO/RDD by RD');
+            $_SESSION['flash_success'] = 'Application reverted back to DO/RDD';
+        }
+        if ($action === 'revert_ieo') {
+            $nextOfficerId = resolveNextOfficerId($db, (int) ($app['region_id'] ?? 0), ['ieo', 'industrial_extension_officer'], $assignTo);
+            $update = ['scrutiny_remarks' => $remarks ?: 'Reverted back to IEO by RD'];
+            if ($nextOfficerId > 0) {
+                $update['assigned_to'] = $nextOfficerId;
+            }
+            $db->update('land_applications', $update, 'id = ?', [$appId]);
+            WorkflowService::moveApplicationStatus($appId, WorkflowService::STATUS_UNDER_IEO_REVIEW, intval($_SESSION['admin_id']), $remarks ?: 'Reverted back to IEO by RD');
+            $_SESSION['flash_success'] = 'Application reverted back to IEO';
+        }
         if ($action === 'forward_rd') {
+            $nextOfficerId = resolveNextOfficerId($db, (int) ($app['region_id'] ?? 0), ['rd', 'regional_director'], $assignTo);
+            $update = ['scrutiny_remarks' => $remarks ?: 'Forwarded to RD'];
+            if ($nextOfficerId > 0) {
+                $update['assigned_to'] = $nextOfficerId;
+            }
+            $db->update('land_applications', $update, 'id = ?', [$appId]);
             WorkflowService::moveApplicationStatus($appId, WorkflowService::STATUS_RD_PENDING, intval($_SESSION['admin_id']), $remarks ?: 'Forwarded to RD');
             $_SESSION['flash_success'] = 'Forwarded to RD decision';
         }
         if ($action === 'raise_objection') {
+            $db->update('land_applications', ['scrutiny_remarks' => $remarks ?: 'Clarification required'], 'id = ?', [$appId]);
             $db->insert('la_objections', [
                 'application_id' => $appId,
                 'raised_by' => intval($_SESSION['admin_id']),
@@ -116,13 +261,106 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     exit;
 }
 
-$officers = $db->fetchAll("SELECT id, name, user_type FROM users WHERE user_type IN ('superadmin','admin','jiada_officer','regional_officer') ORDER BY name ASC");
+if (in_array($sessionRole, ['superadmin', 'admin'], true)) {
+    $assignableRoles = ['counter_clerk', 'ieo', 'industrial_extension_officer', 'do', 'rdd', 'regional_officer', 'jiada_officer', 'rd', 'regional_director'];
+} elseif ($isCounterClerk) {
+    $assignableRoles = ['ieo', 'industrial_extension_officer'];
+} elseif (in_array($sessionRole, ['ieo', 'industrial_extension_officer'], true)) {
+    $assignableRoles = ['do', 'rdd', 'regional_officer', 'jiada_officer'];
+} elseif (in_array($sessionRole, ['do', 'rdd', 'regional_officer', 'jiada_officer'], true)) {
+    $assignableRoles = ['rd', 'regional_director'];
+} elseif ($isRd) {
+    $assignableRoles = ['ieo', 'industrial_extension_officer', 'do', 'rdd', 'regional_officer', 'jiada_officer'];
+} else {
+    $assignableRoles = [];
+}
 
-$apps = $db->fetchAll("SELECT la.*, u.name as user_name, lb.plot_number, lb.base_price_per_sqm, lb.area_sqm 
+$officers = [];
+if (!empty($assignableRoles)) {
+    $rolePlaceholders = implode(',', array_fill(0, count($assignableRoles), '?'));
+    $officerParams = $assignableRoles;
+    $officerSql = "SELECT id, name, user_type, region_id FROM users WHERE status = 'active' AND user_type IN ($rolePlaceholders)";
+    if ($sessionRegionId) {
+        $officerSql .= " AND region_id = ?";
+        $officerParams[] = $sessionRegionId;
+    }
+    $officerSql .= " ORDER BY name ASC";
+    $officers = $db->fetchAll($officerSql, $officerParams);
+}
+
+$appSql = "SELECT la.*, u.name as user_name, lb.plot_number, lb.base_price_per_sqm, lb.area_sqm 
 FROM land_applications la 
 LEFT JOIN users u ON la.user_id = u.id 
-LEFT JOIN land_banks lb ON la.plot_id = lb.id 
-ORDER BY la.id DESC LIMIT 100");
+LEFT JOIN land_banks lb ON la.plot_id = lb.id";
+$appParams = [];
+$appConditions = [];
+
+if ($isCounterClerk) {
+    if ($sessionRegionId) {
+        $appConditions[] = "(la.assigned_to = ? OR (COALESCE(la.region_id, lb.region_id) = ? AND (la.assigned_to IS NULL OR la.status = 'submitted')))";
+        $appParams[] = $sessionAdminId;
+        $appParams[] = $sessionRegionId;
+    } else {
+        $appConditions[] = "(la.assigned_to = ? OR la.assigned_to IS NULL OR la.status = 'submitted')";
+        $appParams[] = $sessionAdminId;
+    }
+} elseif (in_array($sessionRole, ['ieo', 'industrial_extension_officer'], true)) {
+    if ($sessionRegionId) {
+        $appConditions[] = "(la.assigned_to = ? OR (COALESCE(la.region_id, lb.region_id) = ? AND la.status = 'under_scrutiny' AND (la.scrutiny_remarks LIKE ? OR la.scrutiny_remarks LIKE ?)))";
+        $appParams[] = $sessionAdminId;
+        $appParams[] = $sessionRegionId;
+        $appParams[] = '%Forwarded to IEO%';
+        $appParams[] = '%IEO%';
+    } else {
+        $appConditions[] = "(la.assigned_to = ? OR (la.status = 'under_scrutiny' AND (la.scrutiny_remarks LIKE ? OR la.scrutiny_remarks LIKE ?)))";
+        $appParams[] = $sessionAdminId;
+        $appParams[] = '%Forwarded to IEO%';
+        $appParams[] = '%IEO%';
+    }
+} elseif (in_array($sessionRole, ['do', 'rdd', 'regional_officer', 'jiada_officer'], true)) {
+    if ($sessionRegionId) {
+        $appConditions[] = "(la.assigned_to = ? OR (COALESCE(la.region_id, lb.region_id) = ? AND la.status = 'under_scrutiny' AND (la.scrutiny_remarks LIKE ? OR la.scrutiny_remarks LIKE ?)))";
+        $appParams[] = $sessionAdminId;
+        $appParams[] = $sessionRegionId;
+        $appParams[] = '%Forwarded to DO/RDD%';
+        $appParams[] = '%DO/RDD%';
+    } else {
+        $appConditions[] = "(la.assigned_to = ? OR (la.status = 'under_scrutiny' AND (la.scrutiny_remarks LIKE ? OR la.scrutiny_remarks LIKE ?)))";
+        $appParams[] = $sessionAdminId;
+        $appParams[] = '%Forwarded to DO/RDD%';
+        $appParams[] = '%DO/RDD%';
+    }
+} elseif (in_array($sessionRole, ['rd', 'regional_director', 'authority'], true)) {
+    if ($sessionRegionId) {
+        $appConditions[] = "(la.assigned_to = ? OR (COALESCE(la.region_id, lb.region_id) = ? AND la.status = 'under_scrutiny' AND (la.scrutiny_remarks LIKE ? OR la.scrutiny_remarks LIKE ?)))";
+        $appParams[] = $sessionAdminId;
+        $appParams[] = $sessionRegionId;
+        $appParams[] = '%Forwarded to RD%';
+        $appParams[] = '%RD%';
+    } else {
+        $appConditions[] = "(la.assigned_to = ? OR (la.status = 'under_scrutiny' AND (la.scrutiny_remarks LIKE ? OR la.scrutiny_remarks LIKE ?)))";
+        $appParams[] = $sessionAdminId;
+        $appParams[] = '%Forwarded to RD%';
+        $appParams[] = '%RD%';
+    }
+} elseif (!in_array($sessionRole, ['superadmin', 'admin'], true)) {
+    if ($sessionRegionId) {
+        $appConditions[] = "COALESCE(la.region_id, lb.region_id) = ?";
+        $appParams[] = $sessionRegionId;
+    }
+    $appConditions[] = "(la.assigned_to = ? OR la.assigned_to IS NULL)";
+    $appParams[] = $sessionAdminId;
+} elseif ($sessionRegionId) {
+    $appConditions[] = "COALESCE(la.region_id, lb.region_id) = ?";
+    $appParams[] = $sessionRegionId;
+}
+
+if (!empty($appConditions)) {
+    $appSql .= " WHERE " . implode(' AND ', $appConditions);
+}
+
+$appSql .= " ORDER BY la.id DESC LIMIT 100";
+$apps = $db->fetchAll($appSql, $appParams);
 
 function issueProvisionalOrder($db, $app) {
     $plot = $db->fetchOne("SELECT * FROM land_banks WHERE id = ?", [$app['plot_id']]);
@@ -176,9 +414,25 @@ function issueProvisionalOrder($db, $app) {
 
 ob_start();
 ?>
+<?php if ($isCounterClerk): ?>
+<div class="alert alert-info">
+    <i class="fas fa-inbox"></i>
+    Counter Clerk desk: verify documents, raise deficiencies, and forward completed applications to IEO.
+</div>
+<?php elseif ($isIeo): ?>
+<div class="alert alert-info">
+    <i class="fas fa-industry"></i>
+    IEO desk: review CC-forwarded applications, inspect project details, raise clarifications, and forward complete cases to DO/RDD.
+</div>
+<?php elseif ($isRd): ?>
+<div class="alert alert-info">
+    <i class="fas fa-balance-scale"></i>
+    RD desk: review DO/RDD-forwarded applications, take final regional decisions, send files back when needed, and approve, reject, or mark for bidding.
+</div>
+<?php endif; ?>
 <div class="card">
     <div class="card-header">
-        <h3><i class="fas fa-file-alt"></i> Applications Management</h3>
+        <h3><i class="fas fa-file-alt"></i> <?php echo $isCounterClerk ? 'Counter Clerk Applications Queue' : ($isIeo ? 'IEO Applications Queue' : ($isRd ? 'RD Decision Queue' : 'Applications Management')); ?></h3>
     </div>
     <div class="card-body">
         <div class="table-responsive">
@@ -205,14 +459,17 @@ ob_start();
                         <td><?php echo date('d/m/Y', strtotime($a['created_at'])); ?></td>
                         <td>
                             <a class="btn btn-sm btn-outline" href="<?php echo APP_URL; ?>/application-view?id=<?php echo $a['id']; ?>">View</a>
-                            <form method="post" style="margin-top:8px; display:flex; flex-direction:column; gap:6px; min-width:260px;">
+                            <form method="post" enctype="multipart/form-data" style="margin-top:8px; display:flex; flex-direction:column; gap:6px; min-width:260px;">
                                 <input type="hidden" name="application_id" value="<?php echo $a['id']; ?>">
                                 <select name="action" class="form-control form-control-sm">
                                     <option value="">Select action</option>
-                                    <?php if (canPerformAppAction($sessionRole, 'assign_cc')): ?><option value="assign_cc">Assign to CC</option><?php endif; ?>
+                                    <?php if (!$isCounterClerk && canPerformAppAction($sessionRole, 'assign_cc')): ?><option value="assign_cc">Assign to CC</option><?php endif; ?>
                                     <?php if (canPerformAppAction($sessionRole, 'forward_ieo')): ?><option value="forward_ieo">Forward to IEO</option><?php endif; ?>
                                     <?php if (canPerformAppAction($sessionRole, 'forward_do')): ?><option value="forward_do">Forward to DO/RDD</option><?php endif; ?>
+                                    <?php if (canPerformAppAction($sessionRole, 'submit_inspection_report')): ?><option value="submit_inspection_report">Submit Inspection Report</option><?php endif; ?>
                                     <?php if (canPerformAppAction($sessionRole, 'forward_rd')): ?><option value="forward_rd">Forward to RD</option><?php endif; ?>
+                                    <?php if (canPerformAppAction($sessionRole, 'revert_do')): ?><option value="revert_do">Revert to DO/RDD</option><?php endif; ?>
+                                    <?php if (canPerformAppAction($sessionRole, 'revert_ieo')): ?><option value="revert_ieo">Revert to IEO</option><?php endif; ?>
                                     <?php if (canPerformAppAction($sessionRole, 'raise_objection')): ?><option value="raise_objection">Raise Deficiency</option><?php endif; ?>
                                     <?php if (canPerformAppAction($sessionRole, 'mark_for_bidding')): ?><option value="mark_for_bidding">Mark for Bidding</option><?php endif; ?>
                                     <?php if (canPerformAppAction($sessionRole, 'approve')): ?><option value="approve">Approve</option><?php endif; ?>
@@ -220,13 +477,20 @@ ob_start();
                                     <?php if (canPerformAppAction($sessionRole, 'non_entertain')): ?><option value="non_entertain">Mark Non-Entertained</option><?php endif; ?>
                                     <?php if (canPerformAppAction($sessionRole, 'create_bid')): ?><option value="create_bid">Create Closed Bid</option><?php endif; ?>
                                 </select>
+                                <?php if (!empty($officers)): ?>
                                 <select name="assign_to" class="form-control form-control-sm">
-                                    <option value="0">Assign to (optional)</option>
+                                    <option value="0"><?php echo $isCounterClerk ? 'Select IEO (optional)' : ($isIeo ? 'Select DO/RDD (optional)' : ($isRd ? 'Select IEO / DO-RDD (optional)' : 'Assign to (optional)')); ?></option>
                                     <?php foreach ($officers as $o): ?>
-                                        <option value="<?php echo $o['id']; ?>"><?php echo e($o['name'] . ' - ' . ucfirst(str_replace('_', ' ', $o['user_type']))); ?></option>
+                                        <option value="<?php echo $o['id']; ?>"><?php echo e($o['name'] . ' - ' . ucfirst(str_replace('_', ' ', $o['user_type'])) . (!empty($o['region_id']) ? ' (Region ' . $o['region_id'] . ')' : '')); ?></option>
                                     <?php endforeach; ?>
                                 </select>
+                                <?php endif; ?>
                                 <input type="text" name="remarks" class="form-control form-control-sm" placeholder="Remarks or rejection reason">
+                                <?php if ($isIeo): ?>
+                                <input type="date" name="inspection_date" class="form-control form-control-sm" placeholder="Inspection date">
+                                <textarea name="inspection_report_text" class="form-control form-control-sm" rows="2" placeholder="Inspection findings / report summary"></textarea>
+                                <input type="file" name="inspection_report_file" class="form-control form-control-sm">
+                                <?php endif; ?>
                                 <div class="form-row">
                                     <div class="form-group">
                                         <label>Bid Date</label>
@@ -248,6 +512,3 @@ ob_start();
 $content = ob_get_clean();
 include TEMPLATES_PATH . '/admin_layout.php';
 ?>
-
-
-

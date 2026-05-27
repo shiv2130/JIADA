@@ -63,7 +63,7 @@ class AdminAuth {
      */
     public static function addRegionFilter($query, $params) {
         if (self::requireLogin() && $_SESSION['user_type'] === 'regional_officer' && $_SESSION['region_id']) {
-            $query .= ' AND region_id = ?';
+            $query .= (stripos($query, ' where ') !== false ? ' AND ' : ' WHERE ') . 'region_id = ?';
             $params[] = $_SESSION['region_id'];
         }
         return [$query, $params];

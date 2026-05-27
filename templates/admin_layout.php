@@ -1,3 +1,24 @@
+<?php
+$role = strtolower(trim((string)($userRole ?? ($_SESSION['user_type'] ?? 'admin'))));
+$userRole = $role;
+$userName = $userName ?? ($_SESSION['user_name'] ?? 'Admin User');
+$userRegion = $userRegion ?? (!empty($_SESSION['region_id']) ? 'Region ' . $_SESSION['region_id'] : 'All Regions');
+$roleLabels = [
+    'superadmin' => 'Super Admin',
+    'admin' => 'Admin',
+    'jiada_officer' => 'JIADA Officer',
+    'regional_officer' => 'Development Officer / RDD',
+    'counter_clerk' => 'Counter Clerk',
+    'cc' => 'Counter Clerk',
+    'ieo' => 'Industrial Extension Officer',
+    'industrial_extension_officer' => 'Industrial Extension Officer',
+    'do' => 'Development Officer',
+    'rdd' => 'Regional Deputy Director',
+    'rd' => 'Regional Director',
+    'regional_director' => 'Regional Director',
+];
+$displayRole = $roleLabels[$role] ?? ucwords(str_replace('_', ' ', $role));
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -209,34 +230,59 @@
         <aside class="sidebar" id="sidebar">
             <div class="sidebar-header">
                 <div class="logo-icon"><i class="fas fa-building" style="color: white;"></i></div>
-                <div><h3>JIADA Portal</h3><small><?php echo isset($userRole) ? ucfirst(str_replace('_', ' ', $userRole)) : 'Admin'; ?></small></div>
+                <div><h3>JIADA Portal</h3><small><?php echo e($displayRole); ?></small></div>
             </div>
             
             <div class="sidebar-user">
                 <div class="user-avatar"><?php echo strtoupper(substr($userName ?? 'A', 0, 2)); ?></div>
                 <div class="user-info">
-                    <h4><?php echo e($userName ?? 'Admin User'); ?></h4>
-                    <span><?php echo e($userRegion ?? 'All Regions'); ?></span>
+                    <h4><?php echo e($userName); ?></h4>
+                    <span><?php echo e($userRegion); ?></span>
                 </div>
             </div>
             
             <nav class="nav-section">
                 <?php
                 // Get user role and permissions
-                $role = $userRole ?? 'admin';
                 $isSuperAdmin = $role === 'superadmin';
-                $isAdmin = in_array($role, ['superadmin', 'admin']);
-                $isOfficer = in_array($role, ['superadmin', 'admin', 'jiada_officer', 'regional_officer']);
+                $isAdmin = in_array($role, ['superadmin', 'admin'], true);
+                $isCounterClerk = in_array($role, ['counter_clerk', 'cc'], true);
+                $isIeo = in_array($role, ['ieo', 'industrial_extension_officer'], true);
+                $isRd = in_array($role, ['rd', 'regional_director', 'authority'], true);
+                $isOfficer = in_array($role, ['superadmin', 'admin', 'jiada_officer', 'regional_officer', 'counter_clerk', 'cc', 'ieo', 'industrial_extension_officer', 'do', 'rdd', 'rd', 'regional_director'], true);
                 $isApplicant = $role === 'applicant';
                 
                 $navItems = [];
                 
                 // Dashboard - All roles
                 $navItems[] = ['section' => 'MAIN', 'items' => [
-                    ['url' => '/admin/dashboard', 'icon' => 'dashboard', 'title' => 'Dashboard', 'key' => 'dashboard']
+                    ['url' => '/admin/dashboard', 'icon' => 'dashboard', 'title' => $isCounterClerk ? 'Scrutiny Desk' : ($isIeo ? 'IEO Desk' : ($isRd ? 'RD Desk' : 'Dashboard')), 'key' => 'dashboard']
                 ]];
-                
-                if ($isOfficer) {
+
+                if ($isCounterClerk) {
+                    $navItems[] = ['section' => 'COUNTER CLERK', 'items' => [
+                        ['url' => '/admin/?page=applications', 'icon' => 'file-alt', 'title' => 'Applications Queue', 'key' => 'applications'],
+                        ['url' => '/admin/?page=land-bank', 'icon' => 'map', 'title' => 'Land Bank', 'key' => 'land-bank'],
+                        ['url' => '/admin/?page=notifications', 'icon' => 'bell', 'title' => 'Notifications', 'key' => 'notifications'],
+                        ['url' => '/admin/?page=profile', 'icon' => 'user-circle', 'title' => 'My Profile', 'key' => 'profile'],
+                    ]];
+                } elseif ($isIeo) {
+                    $navItems[] = ['section' => 'INDUSTRIAL EXTENSION OFFICER', 'items' => [
+                        ['url' => '/admin/?page=applications', 'icon' => 'file-alt', 'title' => 'Applications Queue', 'key' => 'applications'],
+                        ['url' => '/admin/?page=land-bank', 'icon' => 'map', 'title' => 'Land Bank', 'key' => 'land-bank'],
+                        ['url' => '/admin/?page=notifications', 'icon' => 'bell', 'title' => 'Notifications', 'key' => 'notifications'],
+                        ['url' => '/admin/?page=profile', 'icon' => 'user-circle', 'title' => 'My Profile', 'key' => 'profile'],
+                    ]];
+                } elseif ($isRd) {
+                    $navItems[] = ['section' => 'REGIONAL DIRECTOR', 'items' => [
+                        ['url' => '/admin/?page=applications', 'icon' => 'gavel', 'title' => 'Decision Queue', 'key' => 'applications'],
+                        ['url' => '/admin/?page=allotments', 'icon' => 'file-signature', 'title' => 'Allotment Decisions', 'key' => 'allotments'],
+                        ['url' => '/admin/?page=bids', 'icon' => 'gavel', 'title' => 'Bidding', 'key' => 'bids'],
+                        ['url' => '/admin/?page=land-bank', 'icon' => 'map', 'title' => 'Land Bank', 'key' => 'land-bank'],
+                        ['url' => '/admin/?page=notifications', 'icon' => 'bell', 'title' => 'Notifications', 'key' => 'notifications'],
+                        ['url' => '/admin/?page=profile', 'icon' => 'user-circle', 'title' => 'My Profile', 'key' => 'profile'],
+                    ]];
+                } elseif ($isOfficer) {
                     $navItems[] = ['section' => 'MANAGEMENT', 'items' => [
                         ['url' => '/admin/?page=dashboard', 'icon' => 'dashboard', 'title' => 'Dashboard', 'key' => 'dashboard'],
                         ['url' => '/admin/?page=users', 'icon' => 'users', 'title' => 'User Management', 'key' => 'users'],
