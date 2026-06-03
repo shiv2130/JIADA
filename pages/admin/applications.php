@@ -56,14 +56,31 @@ function persistInspectionArtifacts($db, int $applicationId, string $inspectionD
             return ['success' => false, 'message' => $fileResult['message'] ?? 'Inspection report upload failed'];
         }
 
-        $db->insert('la_application_documents', [
-            'application_id' => $applicationId,
+        $documentPayload = [
             'document_code' => 'inspection_report',
             'document_name' => 'Inspection Report',
             'file_name' => $fileResult['filename'] ?? '',
             'file_path' => $fileResult['path'] ?? '',
             'uploaded_at' => date('Y-m-d H:i:s')
-        ]);
+        ];
+
+        $db->insert('la_application_documents', array_merge(
+            ['application_id' => $applicationId],
+            $documentPayload
+        ));
+
+        $existingApplication = $db->fetchOne("SELECT documents FROM land_applications WHERE id = ?", [$applicationId]);
+        $existingDocuments = [];
+        if (!empty($existingApplication['documents'])) {
+            $decoded = json_decode($existingApplication['documents'], true);
+            if (is_array($decoded)) {
+                $existingDocuments = $decoded;
+            }
+        }
+        $existingDocuments[] = $documentPayload;
+        $db->update('land_applications', [
+            'documents' => json_encode($existingDocuments)
+        ], 'id = ?', [$applicationId]);
         $notes[] = 'Inspection report file uploaded';
     }
 
@@ -104,9 +121,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $bidEnd = $_POST['bid_end_date'] ?? '';
     $inspectionDate = sanitize($_POST['inspection_date'] ?? '');
     $inspectionReportText = sanitize($_POST['inspection_report_text'] ?? '');
+    $inspectionFile = $_FILES['inspection_report_file'] ?? [];
+    $inspectionArtifactAttempted = (
+        trim($inspectionDate) !== ''
+        || trim($inspectionReportText) !== ''
+        || !empty($inspectionFile['name'])
+    );
     
     $app = $db->fetchOne("SELECT * FROM land_applications WHERE id = ?", [$appId]);
     if ($app) {
+        $inspectionResult = ['success' => true, 'saved' => false, 'note' => ''];
+        if ($isIeo && $inspectionArtifactAttempted) {
+            $inspectionResult = persistInspectionArtifacts(
+                $db,
+                $appId,
+                $inspectionDate,
+                $inspectionReportText,
+                $inspectionFile,
+                intval($_SESSION['admin_id'])
+            );
+            if (!$inspectionResult['success']) {
+                $_SESSION['flash_error'] = $inspectionResult['message'] ?? 'Inspection report upload failed';
+                header('Location: ' . APP_URL . '/admin/?page=applications');
+                exit;
+            }
+        }
         if ($action === 'assign_cc' && $assignTo) {
             $db->update('land_applications', ['assigned_to' => $assignTo, 'status' => 'under_scrutiny', 'scrutiny_remarks' => $remarks], 'id = ?', [$appId]);
             WorkflowService::moveApplicationStatus($appId, WorkflowService::STATUS_UNDER_PRELIMINARY_SCRUTINY, intval($_SESSION['admin_id']), $remarks ?: 'Assigned to CC');
@@ -124,21 +163,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_SESSION['flash_success'] = 'Forwarded to IEO review';
         }
         if ($action === 'forward_do') {
-            $inspectionResult = persistInspectionArtifacts(
-                $db,
-                $appId,
-                $inspectionDate,
-                $inspectionReportText,
-                $_FILES['inspection_report_file'] ?? [],
-                intval($_SESSION['admin_id'])
-            );
-            if (!$inspectionResult['success']) {
-                $_SESSION['flash_error'] = $inspectionResult['message'] ?? 'Inspection report upload failed';
-                header('Location: ' . APP_URL . '/admin/?page=applications');
-                exit;
-            }
             $nextOfficerId = resolveNextOfficerId($db, (int) ($app['region_id'] ?? 0), ['do', 'rdd', 'regional_officer', 'jiada_officer'], $assignTo);
             $update = ['scrutiny_remarks' => $remarks ?: 'Forwarded to DO/RDD'];
+            if (!empty($inspectionResult['note'])) {
+                $update['scrutiny_remarks'] = trim(($remarks ?: 'Forwarded to DO/RDD') . ' | ' . $inspectionResult['note']);
+            }
             if ($nextOfficerId > 0) {
                 $update['assigned_to'] = $nextOfficerId;
             }
@@ -147,22 +176,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_SESSION['flash_success'] = 'Forwarded to DO/RDD review';
         }
         if ($action === 'submit_inspection_report') {
-            if ($inspectionReportText === '' && $inspectionDate === '' && empty($_FILES['inspection_report_file']['name'])) {
+            if (!$inspectionArtifactAttempted) {
                 $_SESSION['flash_error'] = 'Please enter inspection findings or upload an inspection report file';
             } else {
-                $inspectionResult = persistInspectionArtifacts(
-                    $db,
-                    $appId,
-                    $inspectionDate,
-                    $inspectionReportText,
-                    $_FILES['inspection_report_file'] ?? [],
-                    intval($_SESSION['admin_id'])
-                );
-                if (!$inspectionResult['success']) {
-                    $_SESSION['flash_error'] = $inspectionResult['message'] ?? 'Inspection report upload failed';
-                    header('Location: ' . APP_URL . '/admin/?page=applications');
-                    exit;
-                }
                 if (!empty($inspectionResult['note'])) {
                     $db->update('land_applications', [
                         'scrutiny_remarks' => $inspectionResult['note']

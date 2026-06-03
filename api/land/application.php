@@ -78,6 +78,49 @@ foreach ($documentRows as $row) {
     ];
 }
 
+$legacyDocuments = [];
+if (!empty($application['documents']) && is_array($application['documents'])) {
+    foreach ($application['documents'] as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+
+        $documentCode = (string) ($row['document_code'] ?? '');
+        $filePath = (string) ($row['file_path'] ?? '');
+        if ($documentCode === '' || $filePath === '') {
+            continue;
+        }
+
+        $webPath = '';
+        if (strpos($filePath, BASE_PATH) === 0) {
+            $relativePath = str_replace('\\', '/', substr($filePath, strlen(BASE_PATH)));
+            $webPath = APP_URL . $relativePath;
+        }
+
+        $legacyDocuments[] = [
+            'document_code' => $documentCode,
+            'document_name' => $row['document_name'] ?? ucwords(str_replace('_', ' ', $documentCode)),
+            'file_name' => $row['file_name'] ?? basename($filePath),
+            'file_path' => $filePath,
+            'file_url' => $webPath,
+            'uploaded_at' => $row['uploaded_at'] ?? null,
+        ];
+    }
+}
+
+if (!empty($legacyDocuments)) {
+    $existingDocumentKeys = [];
+    foreach ($documents as $document) {
+        $existingDocumentKeys[] = ($document['document_code'] ?? '') . '|' . ($document['file_path'] ?? '');
+    }
+    foreach ($legacyDocuments as $document) {
+        $documentKey = ($document['document_code'] ?? '') . '|' . ($document['file_path'] ?? '');
+        if (!in_array($documentKey, $existingDocumentKeys, true)) {
+            $documents[] = $document;
+        }
+    }
+}
+
 $application['uploaded_documents'] = $documents;
 $application['inspection_documents'] = array_values(array_filter($documents, function ($document) {
     return ($document['document_code'] ?? '') === 'inspection_report';

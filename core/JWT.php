@@ -9,6 +9,49 @@ if (!defined('JIADA_APP')) {
 }
 
 class JWT {
+    /**
+     * Fall back to the active PHP session when a same-site page still has a
+     * valid login session but the embedded JWT has expired.
+     */
+    private static function authenticateFromSession() {
+        if (session_status() === PHP_SESSION_NONE) {
+            @session_start();
+        }
+
+        $sessionUserId = (int) ($_SESSION['user_id'] ?? 0);
+        if ($sessionUserId <= 0) {
+            return null;
+        }
+
+        $db = getDB();
+        $user = $db->fetchOne(
+            "SELECT * FROM users WHERE id = ? AND (status IS NULL OR status NOT IN ('inactive', 'blocked'))",
+            [$sessionUserId]
+        );
+
+        if (!$user) {
+            return null;
+        }
+
+        // Refresh the session JWT so subsequent full page loads embed a fresh token.
+        $tokenResult = self::generateToken($user['id'], $user['user_type'], [
+            'name' => $user['name'] ?? '',
+            'email' => $user['email'] ?? ''
+        ]);
+        if (!empty($tokenResult['token'])) {
+            $_SESSION['jwt_token'] = $tokenResult['token'];
+        }
+
+        return [
+            'success' => true,
+            'user' => $user,
+            'token_data' => [
+                'sub' => $user['id'],
+                'userType' => $user['user_type'],
+                'auth_mode' => 'session_fallback'
+            ]
+        ];
+    }
     
     /**
      * Encode JWT token
@@ -147,6 +190,11 @@ class JWT {
         $token = self::getAuthorizationToken();
         
         if (!$token) {
+            $sessionAuth = self::authenticateFromSession();
+            if ($sessionAuth) {
+                return $sessionAuth;
+            }
+
             return [
                 'success' => false,
                 'message' => 'Authorization token required',
@@ -157,6 +205,11 @@ class JWT {
         $decoded = self::decode($token);
         
         if (!$decoded['success']) {
+            $sessionAuth = self::authenticateFromSession();
+            if ($sessionAuth) {
+                return $sessionAuth;
+            }
+
             return [
                 'success' => false,
                 'message' => $decoded['message'],

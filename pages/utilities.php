@@ -117,19 +117,22 @@ let currentTicketId = null;
 $(document).ready(function() {
     $('#utilityForm').on('submit', function(e) {
         e.preventDefault();
-        const formData = new FormData(this);
-        const subject = $('[name=\"subject\"]').val().trim();
-        const description = $('[name=\"description\"]').val().trim();
-        const utilityType = $('[name=\"utility_type\"]').val();
-        const priority = $('[name=\"priority\"]').val();
-        const files = $('[name=\"attachments[]\"]')[0].files;
+        const form = this;
+        const $form = $(form);
+        const formData = new FormData(form);
+        const subject = ($form.find('[name="subject"]').val() || '').trim();
+        const description = ($form.find('[name="description"]').val() || '').trim();
+        const utilityType = $form.find('[name="utility_type"]').val();
+        const priority = $form.find('[name="priority"]').val();
+        const attachmentInput = $form.find('[name="attachments[]"]')[0];
+        const files = attachmentInput ? attachmentInput.files : [];
 
         if (!utilityType) { showAlert('Please select a service type.', 'danger'); return; }
         if (!priority) { showAlert('Please select a priority.', 'danger'); return; }
         if (subject.length < 5 || subject.length > 150) { showAlert('Subject must be between 5 and 150 characters.', 'danger'); return; }
         if (description.length < 10) { showAlert('Description must be at least 10 characters.', 'danger'); return; }
         if (files.length > 5) { showAlert('You can upload up to 5 images.', 'danger'); return; }
-        const allowed = ['image/jpeg','image/png','image/gif'];
+        const allowed = ['image/jpeg','image/png','image/gif','image/webp'];
         for (let i = 0; i < files.length; i++) {
             if (files[i].size > 5 * 1024 * 1024) { showAlert('Each image must be under 5 MB.', 'danger'); return; }
             if (!allowed.includes(files[i].type)) { showAlert('Only JPG, PNG, GIF, or WEBP images are allowed.', 'danger'); return; }
@@ -145,7 +148,10 @@ $(document).ready(function() {
                 if(res.success) { showAlert('Ticket raised successfully!', 'success'); hideTicketForm(); loadTickets(); }
                 else { showAlert(res.message || 'Failed to create ticket', 'danger'); }
             },
-            error: function() { showAlert('Network error. Please try again.', 'danger'); }
+            error: function(xhr) {
+                const message = xhr?.responseJSON?.message || 'Network error. Please try again.';
+                showAlert(message, 'danger');
+            }
         });
     });
 

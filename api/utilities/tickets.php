@@ -78,7 +78,12 @@ function listTickets($user) {
 function createTicket($user) {
     $input = getPost();
     $db = getDB();
-    $columns = array_map(function($c) { return $c['Field']; }, $db->fetchAll("SHOW COLUMNS FROM utility_tickets"));
+    $columnMeta = $db->fetchAll("SHOW COLUMNS FROM utility_tickets");
+    $columns = array_map(function($c) { return $c['Field']; }, $columnMeta);
+    $columnsByField = [];
+    foreach ($columnMeta as $column) {
+        $columnsByField[$column['Field']] = $column;
+    }
     
     // Validate required fields
     $required = ['utility_type', 'priority', 'subject', 'description'];
@@ -89,8 +94,9 @@ function createTicket($user) {
     }
     
     // Validate utility type
+    $requestedUtilityType = sanitize($input['utility_type']);
     $validTypes = ['water', 'electricity', 'sewage', 'road', 'street_light', 'maintenance', 'other'];
-    if (!in_array($input['utility_type'], $validTypes)) {
+    if (!in_array($requestedUtilityType, $validTypes, true)) {
         jsonResponse(['success' => false, 'message' => 'Invalid utility type'], 400);
     }
     
@@ -134,7 +140,7 @@ function createTicket($user) {
                 'size' => $_FILES['attachments']['size'][$key]
             ];
 
-            $validation = validateFileUpload($fileData, ['jpg', 'jpeg', 'png', 'gif'], 5 * 1024 * 1024);
+            $validation = validateFileUpload($fileData, ['jpg', 'jpeg', 'png', 'gif', 'webp'], 5 * 1024 * 1024);
             if (!$validation['success']) {
                 jsonResponse(['success' => false, 'message' => 'Attachment error: ' . ($validation['message'] ?? 'Invalid file')], 400);
             }
@@ -159,11 +165,23 @@ function createTicket($user) {
         $userRecord = $db->fetchOne("SELECT region_id FROM users WHERE id = ?", [$user['id']]);
         $regionId = $userRecord['region_id'] ?? null;
 
+        $utilityTypeValue = $requestedUtilityType;
+        $utilityTypeColumn = $columnsByField['utility_type']['Type'] ?? '';
+        if (
+            in_array('utility_type', $columns, true)
+            && $utilityTypeColumn !== ''
+            && stripos($utilityTypeColumn, 'enum(') === 0
+            && strpos($utilityTypeColumn, "'maintenance'") === false
+            && $requestedUtilityType === 'maintenance'
+        ) {
+            $utilityTypeValue = 'other';
+        }
+
         $insertData = [
             'user_id' => $user['id'],
             'plot_id' => !empty($input['plot_id']) ? intval($input['plot_id']) : null,
             'unit_id' => !empty($input['unit_id']) ? intval($input['unit_id']) : null,
-            'utility_type' => sanitize($input['utility_type']),
+            'utility_type' => $utilityTypeValue,
             'priority' => sanitize($input['priority']),
             'subject' => sanitize($input['subject']),
             'description' => sanitize($input['description']),
@@ -179,8 +197,10 @@ function createTicket($user) {
         if (in_array('region_id', $columns)) {
             $insertData['region_id'] = $regionId;
         }
-        if (in_array('service_type', $columns)) {
-            $insertData['service_type'] = $insertData['utility_type'];
+        if (in_array('service_type', $columns, true)) {
+            $insertData['service_type'] = $requestedUtilityType;
+        }
+        if (!in_array('utility_type', $columns, true)) {
             unset($insertData['utility_type']);
         }
         if (!in_array('unit_id', $columns)) {

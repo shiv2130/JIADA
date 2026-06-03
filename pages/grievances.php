@@ -60,18 +60,39 @@ ob_start();
     </div>
 </div>
 <script>
-function showGrievanceForm() { $('#grievanceForm').slideDown(); }
+function requireGrievanceAuth() {
+    if (APP_CONFIG.user?.id) {
+        return true;
+    }
+
+    alert('Please log in to file or track grievances.');
+    window.location.href = '<?php echo APP_URL; ?>/login';
+    return false;
+}
+
+function showGrievanceForm() {
+    if (!requireGrievanceAuth()) {
+        return;
+    }
+    $('#grievanceForm').slideDown();
+}
 function hideGrievanceForm() { $('#grievanceForm').slideUp(); }
 
 $(document).ready(function() {
     $('#grievanceFormEl').on('submit', function(e) {
         e.preventDefault();
-        const formData = new FormData(this);
-        const category = $('[name=\"category\"]').val();
-        const department = $('[name=\"department\"]').val();
-        const subject = $('[name=\"subject\"]').val().trim();
-        const description = $('[name=\"description\"]').val().trim();
-        const files = $('[name=\"attachments[]\"]')[0].files;
+        if (!requireGrievanceAuth()) {
+            return;
+        }
+        const form = this;
+        const $form = $(form);
+        const formData = new FormData(form);
+        const category = $form.find('[name="category"]').val();
+        const department = $form.find('[name="department"]').val();
+        const subject = ($form.find('[name="subject"]').val() || '').trim();
+        const description = ($form.find('[name="description"]').val() || '').trim();
+        const attachmentInput = $form.find('[name="attachments[]"]')[0];
+        const files = attachmentInput ? attachmentInput.files : [];
 
         if (!category) { alert('Please select a category.'); return; }
         if (!department) { alert('Please select a department.'); return; }
@@ -94,11 +115,22 @@ $(document).ready(function() {
                 if(res.success) { alert('Grievance filed successfully!'); hideGrievanceForm(); loadGrievances(); }
                 else { alert(res.message); }
             },
-            error: function() { alert('Network error. Please try again.'); }
+            error: function(xhr) {
+                if (xhr?.status === 401) {
+                    alert('Please log in to file or track grievances.');
+                    window.location.href = '<?php echo APP_URL; ?>/login';
+                    return;
+                }
+                alert(xhr?.responseJSON?.message || 'Network error. Please try again.');
+            }
         });
     });
     
     function loadGrievances() {
+        if (!APP_CONFIG.user?.id) {
+            $('#grievancesList').html('<div class="alert alert-info">Please log in to view or file grievances.</div>');
+            return;
+        }
         $.get('<?php echo APP_URL; ?>/api/grievances/list', function(res) {
             if(res.success) {
                 let html = '<h3>My Grievances</h3>';
@@ -114,7 +146,15 @@ $(document).ready(function() {
                     html += '</tbody></table></div>';
                 }
                 $('#grievancesList').html(html);
+            } else {
+                $('#grievancesList').html(`<div class="alert alert-warning">${res.message || 'Unable to load grievances right now.'}</div>`);
             }
+        }).fail(function(xhr) {
+            if (xhr?.status === 401) {
+                $('#grievancesList').html('<div class="alert alert-info">Please log in to view or file grievances.</div>');
+                return;
+            }
+            $('#grievancesList').html('<div class="alert alert-danger">Unable to load grievances right now.</div>');
         });
     }
     loadGrievances();

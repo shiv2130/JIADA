@@ -74,15 +74,31 @@ try {
     // Generate grievance number
     $grievanceNumber = generateReferenceNumber('GRV');
     
-    // Find appropriate secondment officer
-    $officer = $db->fetchOne(
-        "SELECT u.id FROM users u
-         INNER JOIN user_roles ur ON u.id = ur.user_id
-         INNER JOIN roles r ON ur.role_id = r.id
-         WHERE r.name LIKE '%secondment%' 
-         AND u.status = 'active'
-         ORDER BY u.id ASC LIMIT 1"
-    );
+    // Find appropriate secondment officer when RBAC tables are available.
+    $officer = null;
+    try {
+        $rolesTableExists = $db->fetchOne(
+            "SELECT 1 AS ok FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'roles' LIMIT 1"
+        );
+        $userRolesTableExists = $db->fetchOne(
+            "SELECT 1 AS ok FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'user_roles' LIMIT 1"
+        );
+
+        if ($rolesTableExists && $userRolesTableExists) {
+            $officer = $db->fetchOne(
+                "SELECT u.id FROM users u
+                 INNER JOIN user_roles ur ON u.id = ur.user_id
+                 INNER JOIN roles r ON ur.role_id = r.id
+                 WHERE r.name LIKE '%secondment%'
+                 AND u.status = 'active'
+                 ORDER BY u.id ASC LIMIT 1"
+            );
+        } else {
+            logMessage('Grievance officer auto-assignment skipped: roles/user_roles tables not found', 'info', 'general');
+        }
+    } catch (Exception $roleEx) {
+        logMessage('Grievance officer auto-assignment skipped: ' . $roleEx->getMessage(), 'info', 'general');
+    }
     
     // Calculate SLA deadline (5 business days)
     $slaDeadline = date(DATETIME_FORMAT, strtotime('+5 weekdays'));

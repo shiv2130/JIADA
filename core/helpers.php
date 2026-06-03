@@ -26,7 +26,15 @@ function sanitize($data) {
  * Escape output for HTML
  */
 function e($string) {
-    return htmlspecialchars($string, ENT_QUOTES, 'UTF-8');
+    if ($string === null) {
+        return '';
+    }
+    if (is_bool($string)) {
+        $string = $string ? '1' : '0';
+    } elseif (!is_scalar($string)) {
+        $string = json_encode($string);
+    }
+    return htmlspecialchars((string) $string, ENT_QUOTES, 'UTF-8');
 }
 
 /**
