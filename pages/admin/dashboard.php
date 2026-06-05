@@ -470,46 +470,46 @@ ob_start();
 </div>
 
 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px;">
-    <div class="card" style="padding: 20px; text-align: center; background: #e3f2fd;">
+    <a href="<?php echo APP_URL; ?>/admin/?page=users" class="card" style="padding: 20px; text-align: center; background: #e3f2fd; text-decoration: none; color: inherit; display: block;">
         <i class="fas fa-users fa-2x" style="color: #1976d2;"></i>
         <h3 style="margin: 10px 0;"><?php echo number_format($stats['total_users']); ?></h3>
         <p style="color: var(--gray);">Registered Users</p>
-    </div>
-    <div class="card" style="padding: 20px; text-align: center; background: #e8f5e9;">
+    </a>
+    <a href="<?php echo APP_URL; ?>/admin/?page=land-bank" class="card" style="padding: 20px; text-align: center; background: #e8f5e9; text-decoration: none; color: inherit; display: block;">
         <i class="fas fa-map fa-2x" style="color: #388e3c;"></i>
         <h3 style="margin: 10px 0;"><?php echo number_format($stats['total_plots']); ?></h3>
         <p style="color: var(--gray);">Total Plots</p>
-    </div>
-    <div class="card" style="padding: 20px; text-align: center; background: #fff3e0;">
+    </a>
+    <a href="<?php echo APP_URL; ?>/admin/?page=applications" class="card" style="padding: 20px; text-align: center; background: #fff3e0; text-decoration: none; color: inherit; display: block;">
         <i class="fas fa-clock fa-2x" style="color: #f57c00;"></i>
         <h3 style="margin: 10px 0;"><?php echo number_format($stats['pending_applications']); ?></h3>
         <p style="color: var(--gray);">Pending Applications</p>
-    </div>
-    <div class="card" style="padding: 20px; text-align: center; background: #f3e5f5;">
+    </a>
+     <a href="<?php echo APP_URL; ?>/admin/?page=payments" class="card" style="padding: 20px; text-align: center; background:  #f0e3f5; text-decoration: none; color: inherit; display: block;">
         <i class="fas fa-indian-rupee-sign fa-2x" style="color: #7b1fa2;"></i>
         <h3 style="margin: 10px 0;">₹<?php echo number_format($stats['total_revenue'], 2); ?></h3>
         <p style="color: var(--gray);">Revenue Collected</p>
-    </div>
-    <div class="card" style="padding: 20px; text-align: center; background: #fce4ec;">
+    </a>
+    <a href="<?php echo APP_URL; ?>/admin/?page=grievances" class="card" style="padding: 20px; text-align: center; background: #fce4ec; text-decoration: none; color: inherit; display: block;">
         <i class="fas fa-exclamation-circle fa-2x" style="color: #c62828;"></i>
         <h3 style="margin: 10px 0;"><?php echo $stats['open_grievances']; ?></h3>
         <p style="color: var(--gray);">Open Grievances</p>
-    </div>
-    <div class="card" style="padding: 20px; text-align: center; background: #e0f7fa;">
+    </a>
+    <a href="<?php echo APP_URL; ?>/admin/?page=utilities" class="card" style="padding: 20px; text-align: center; background: #d0eaec; text-decoration: none; color: inherit; display: block;">
         <i class="fas fa-tools fa-2x" style="color: #00838f;"></i>
         <h3 style="margin: 10px 0;"><?php echo $stats['open_tickets']; ?></h3>
         <p style="color: var(--gray);">Utility Tickets</p>
-    </div>
-    <div class="card" style="padding: 20px; text-align: center; background: #fff8e1;">
+    </a>
+    <a href="<?php echo APP_URL; ?>/admin/?page=court-cases" class="card" style="padding: 20px; text-align: center; background: #eee8e0; text-decoration: none; color: inherit; display: block;">
         <i class="fas fa-balance-scale fa-2x" style="color: #f9a825;"></i>
         <h3 style="margin: 10px 0;"><?php echo $stats['court_cases']; ?></h3>
         <p style="color: var(--gray);">Active Court Cases</p>
-    </div>
-    <div class="card" style="padding: 20px; text-align: center; background: #efebe9;">
+    </a>
+   <a href="<?php echo APP_URL; ?>/admin/?page=applications" class="card" style="padding: 20px; text-align: center; background:  #eee3e1; text-decoration: none; color: inherit; display: block;">
         <i class="fas fa-file-alt fa-2x" style="color: #4e342e;"></i>
         <h3 style="margin: 10px 0;"><?php echo number_format($stats['total_applications']); ?></h3>
         <p style="color: var(--gray);">Total Applications</p>
-    </div>
+    </a>
 </div>
 
 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
