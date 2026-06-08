@@ -8,8 +8,11 @@ if (!isset($_SESSION['admin_id'])) { header('Location: ' . APP_URL . '/admin/?pa
 
 $db = getDB();
 $showAddForm = isset($_GET['show']) && $_GET['show'] === 'add';
+$editUserId = !empty($_GET['edit']) ? (int) $_GET['edit'] : 0;
 $flashError = '';
 $flashSuccess = '';
+$editingUser = null;
+$columns = array_map(function($c) { return $c['Field']; }, $db->fetchAll("SHOW COLUMNS FROM users"));
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'add_user') {
     $name = trim((string) ($_POST['name'] ?? ''));
@@ -39,8 +42,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'add_u
             $flashError = 'A user with this email or mobile already exists.';
             $showAddForm = true;
         } else {
-            $columns = array_map(function($c) { return $c['Field']; }, $db->fetchAll("SHOW COLUMNS FROM users"));
-
             $payload = [
                 'name' => $name,
                 'email' => $email,
@@ -71,12 +72,91 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'add_u
     }
 }
 
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'update_user') {
+    $userId = (int) ($_POST['user_id'] ?? 0);
+    $name = trim((string) ($_POST['name'] ?? ''));
+    $email = strtolower(trim((string) ($_POST['email'] ?? '')));
+    $mobile = preg_replace('/\D+/', '', (string) ($_POST['mobile'] ?? ''));
+    $userType = trim((string) ($_POST['user_type'] ?? ''));
+    $regionId = !empty($_POST['region_id']) ? (int) $_POST['region_id'] : null;
+    $status = trim((string) ($_POST['status'] ?? 'active'));
+    $password = (string) ($_POST['password'] ?? '');
+
+    if ($userId <= 0 || $name === '' || $email === '' || $mobile === '' || $userType === '') {
+        $flashError = 'Name, email, mobile, and user type are required.';
+        $editUserId = $userId;
+    } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        $flashError = 'Please enter a valid email address.';
+        $editUserId = $userId;
+    } elseif (strlen($mobile) < 10) {
+        $flashError = 'Please enter a valid mobile number.';
+        $editUserId = $userId;
+    } else {
+        $existing = $db->fetchOne(
+            "SELECT id FROM users WHERE (email = ? OR mobile = ?) AND id != ? LIMIT 1",
+            [$email, $mobile, $userId]
+        );
+
+        if ($existing) {
+            $flashError = 'Another user already uses this email or mobile.';
+            $editUserId = $userId;
+        } else {
+            $payload = [
+                'name' => $name,
+                'email' => $email,
+                'mobile' => $mobile,
+                'user_type' => $userType,
+                'status' => $status,
+                'region_id' => $regionId,
+            ];
+
+            if ($password !== '') {
+                $payload['password'] = password_hash($password, PASSWORD_BCRYPT);
+            }
+            if (in_array('updated_at', $columns, true)) {
+                $payload['updated_at'] = date('Y-m-d H:i:s');
+            }
+
+            $db->update('users', $payload, 'id = ?', [$userId]);
+            header('Location: ' . APP_URL . '/admin/?page=users&updated=1');
+            exit;
+        }
+    }
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'delete_user') {
+    $userId = (int) ($_POST['user_id'] ?? 0);
+    if ($userId <= 0) {
+        $flashError = 'Invalid user selected for deletion.';
+    } elseif ($userId === (int) ($_SESSION['admin_id'] ?? 0)) {
+        $flashError = 'You cannot delete the currently logged-in admin user.';
+    } else {
+        $db->delete('users', 'id = ?', [$userId]);
+        header('Location: ' . APP_URL . '/admin/?page=users&deleted=1');
+        exit;
+    }
+}
+
 if (isset($_GET['success']) && $_GET['success'] === '1') {
     $flashSuccess = 'User added successfully.';
+}
+if (isset($_GET['updated']) && $_GET['updated'] === '1') {
+    $flashSuccess = 'User updated successfully.';
+}
+if (isset($_GET['deleted']) && $_GET['deleted'] === '1') {
+    $flashSuccess = 'User deleted successfully.';
 }
 
 $regions = $db->fetchAll("SELECT id, name FROM regions ORDER BY name ASC");
 $users = $db->fetchAll("SELECT u.*, r.name as region_name FROM users u LEFT JOIN regions r ON u.region_id = r.id ORDER BY u.id DESC LIMIT 100");
+
+if ($editUserId > 0) {
+    $editingUser = $db->fetchOne("SELECT * FROM users WHERE id = ? LIMIT 1", [$editUserId]);
+    if (!$editingUser && !$flashError) {
+        $flashError = 'User not found for editing.';
+        $editUserId = 0;
+    }
+}
 
 ob_start();
 ?>
@@ -158,6 +238,77 @@ ob_start();
             </div>
         <?php endif; ?>
 
+        <?php if ($editingUser): ?>
+            <div class="card" style="margin-bottom: 20px;">
+                <div class="card-header">
+                    <h4><i class="fas fa-user-edit"></i> Edit User #<?php echo (int) $editingUser['id']; ?></h4>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="<?php echo APP_URL; ?>/admin/?page=users&edit=<?php echo (int) $editingUser['id']; ?>">
+                        <input type="hidden" name="action" value="update_user">
+                        <input type="hidden" name="user_id" value="<?php echo (int) $editingUser['id']; ?>">
+                        <?php
+                            $formName = $_POST['name'] ?? $editingUser['name'] ?? '';
+                            $formEmail = $_POST['email'] ?? $editingUser['email'] ?? '';
+                            $formMobile = $_POST['mobile'] ?? $editingUser['mobile'] ?? '';
+                            $formType = $_POST['user_type'] ?? $editingUser['user_type'] ?? '';
+                            $formRegion = array_key_exists('region_id', $_POST) ? (string) $_POST['region_id'] : (string) ($editingUser['region_id'] ?? '');
+                            $formStatus = $_POST['status'] ?? $editingUser['status'] ?? 'active';
+                        ?>
+                        <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 15px;">
+                            <div class="form-group">
+                                <label>Name</label>
+                                <input type="text" name="name" class="form-control" value="<?php echo e($formName); ?>" required>
+                            </div>
+                            <div class="form-group">
+                                <label>Email</label>
+                                <input type="email" name="email" class="form-control" value="<?php echo e($formEmail); ?>" required>
+                            </div>
+                            <div class="form-group">
+                                <label>Mobile</label>
+                                <input type="text" name="mobile" class="form-control" value="<?php echo e($formMobile); ?>" required>
+                            </div>
+                            <div class="form-group">
+                                <label>New Password (optional)</label>
+                                <input type="password" name="password" class="form-control" placeholder="Leave blank to keep current password">
+                            </div>
+                            <div class="form-group">
+                                <label>User Type</label>
+                                <select name="user_type" class="form-control" required>
+                                    <?php foreach (['superadmin','admin','regional_officer','counter_clerk','ieo','rd','employee','applicant'] as $type): ?>
+                                        <option value="<?php echo e($type); ?>" <?php echo $formType === $type ? 'selected' : ''; ?>><?php echo e($type); ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Region</label>
+                                <select name="region_id" class="form-control">
+                                    <option value="">No Region</option>
+                                    <?php foreach ($regions as $region): ?>
+                                        <option value="<?php echo (int) $region['id']; ?>" <?php echo $formRegion === (string) $region['id'] ? 'selected' : ''; ?>>
+                                            <?php echo e($region['name']); ?>
+                                        </option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Status</label>
+                                <select name="status" class="form-control">
+                                    <option value="active" <?php echo $formStatus === 'active' ? 'selected' : ''; ?>>active</option>
+                                    <option value="inactive" <?php echo $formStatus === 'inactive' ? 'selected' : ''; ?>>inactive</option>
+                                    <option value="pending_verification" <?php echo $formStatus === 'pending_verification' ? 'selected' : ''; ?>>pending_verification</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div style="display:flex; gap:10px; margin-top: 15px;">
+                            <button type="submit" class="btn btn-primary">Save Changes</button>
+                            <a href="<?php echo APP_URL; ?>/admin/?page=users" class="btn btn-outline">Cancel</a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        <?php endif; ?>
+
         <div class="table-responsive">
             <table class="table">
                 <thead>
@@ -174,8 +325,12 @@ ob_start();
                         <td><?php echo e($u['region_name'] ?? '-'); ?></td>
                         <td><span class="badge badge-<?php echo $u['status'] === 'active' ? 'success' : 'warning'; ?>"><?php echo e($u['status']); ?></span></td>
                         <td>
-                            <button class="btn btn-sm btn-outline" onclick="alert('Edit user <?php echo $u['id']; ?>')">Edit</button>
-                            <button class="btn btn-sm btn-danger" onclick="alert('Delete user <?php echo $u['id']; ?>')">Delete</button>
+                            <a class="btn btn-sm btn-outline" href="<?php echo APP_URL; ?>/admin/?page=users&edit=<?php echo (int) $u['id']; ?>">Edit</a>
+                            <form method="POST" action="<?php echo APP_URL; ?>/admin/?page=users" style="display:inline;" onsubmit="return confirm('Delete user <?php echo e(addslashes($u['name'] ?? ('#' . $u['id']))); ?>?');">
+                                <input type="hidden" name="action" value="delete_user">
+                                <input type="hidden" name="user_id" value="<?php echo (int) $u['id']; ?>">
+                                <button type="submit" class="btn btn-sm btn-danger">Delete</button>
+                            </form>
                         </td>
                     </tr>
                     <?php endforeach; ?>

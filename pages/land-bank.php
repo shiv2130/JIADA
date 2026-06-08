@@ -12,13 +12,16 @@ ob_start();
                 <select id="zoneFilter" class="form-control" style="width: 170px;">
                     <option value="">All Zones</option>
                     <option value="Ranchi">Ranchi</option>
-                    <option value="Jamshedpur">Jamshedpur</option>
-                    <option value="Dhanbad">Dhanbad</option>
+                    <option value="Adityapur">Adityapur</option>
+                    <option value="Santhal">Santhal Pragana</option>
                     <option value="Bokaro">Bokaro</option>
                 </select>
                 <select id="statusFilter" class="form-control" style="width: 150px;">
-                    <option value="available">Available</option>
                     <option value="">All Status</option>
+                    <option value="available">Available</option>
+                    <option value="reserved">Reserved</option>
+                    <option value="allotted">Allotted</option>
+                    <option value="under_maintenance">Under Maintenance</option>
                 </select>
             </div>
         </div>
@@ -48,6 +51,7 @@ $(document).ready(function() {
     
     function loadPlots() {
         $.get('<?php echo APP_URL; ?>/api/land/plots', {
+            per_page: 500,
             status: $('#statusFilter').val(),
             zone: $('#zoneFilter').val()
         }, function(res) {

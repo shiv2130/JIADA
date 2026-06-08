@@ -7,10 +7,89 @@ if (session_status() === PHP_SESSION_NONE) session_start();
 if (!isset($_SESSION['admin_id'])) { header('Location: ' . APP_URL . '/admin/?page=login'); exit; }
 
 $db = getDB();
+$showAddPlotForm = (($_GET['show'] ?? '') === 'add');
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
     try {
+        if ($action === 'add_plot') {
+            $plotNumber = trim($_POST['plot_number'] ?? '');
+            $plotNo = trim($_POST['plot_no'] ?? '');
+            $surveyNumber = trim($_POST['survey_number'] ?? '');
+            $plotType = trim($_POST['plot_type'] ?? 'industrial');
+            $areaSqm = floatval($_POST['area_sqm'] ?? 0);
+            $areaSqftInput = trim($_POST['area_sqft'] ?? '');
+            $areaSqft = $areaSqftInput !== '' ? floatval($areaSqftInput) : ($areaSqm > 0 ? round($areaSqm * 10.7639, 2) : 0);
+            $zone = trim($_POST['zone'] ?? '');
+            $industryType = trim($_POST['industry_type'] ?? '');
+            $latitudeInput = trim($_POST['latitude'] ?? '');
+            $longitudeInput = trim($_POST['longitude'] ?? '');
+            $locationLatInput = trim($_POST['location_lat'] ?? '');
+            $locationLngInput = trim($_POST['location_lng'] ?? '');
+            $basePriceInput = trim($_POST['base_price'] ?? '');
+            $basePricePerSqmInput = trim($_POST['base_price_per_sqm'] ?? '');
+            $sector = trim($_POST['sector'] ?? '');
+            $regionId = intval($_POST['region_id'] ?? 0);
+            $status = trim($_POST['status'] ?? 'available');
+            $infrastructureType = trim($_POST['infrastructure_type'] ?? 'raw_land');
+            $utilitiesAvailable = trim($_POST['utilities_available'] ?? '');
+            $boundaryCoordinates = trim($_POST['boundary_coordinates'] ?? '');
+            $remarks = trim($_POST['remarks'] ?? '');
+
+            if ($plotNumber === '' || $areaSqm <= 0 || $zone === '' || !$regionId) {
+                throw new Exception('Plot number, area (sqm), zone, and region are required.');
+            }
+
+            $existingPlot = $db->fetchOne("SELECT id FROM land_banks WHERE plot_number = ?", [$plotNumber]);
+            if ($existingPlot) {
+                throw new Exception('A land bank entry with this plot number already exists.');
+            }
+
+            $basePricePerSqm = $basePricePerSqmInput !== '' ? floatval($basePricePerSqmInput) : null;
+            $basePrice = $basePriceInput !== '' ? floatval($basePriceInput) : null;
+            if ($basePrice === null && $basePricePerSqm !== null && $areaSqm > 0) {
+                $basePrice = round($basePricePerSqm * $areaSqm, 2);
+            }
+
+            $utilitiesPayload = null;
+            if ($utilitiesAvailable !== '') {
+                $decodedUtilities = json_decode($utilitiesAvailable, true);
+                if (json_last_error() === JSON_ERROR_NONE) {
+                    $utilitiesPayload = json_encode($decodedUtilities);
+                } else {
+                    $utilitiesList = array_values(array_filter(array_map('trim', preg_split('/[,\\n]+/', $utilitiesAvailable))));
+                    $utilitiesPayload = json_encode($utilitiesList);
+                }
+            }
+
+            $db->insert('land_banks', [
+                'plot_no' => $plotNo !== '' ? $plotNo : null,
+                'area_sqft' => $areaSqft > 0 ? $areaSqft : null,
+                'plot_number' => $plotNumber,
+                'survey_number' => $surveyNumber !== '' ? $surveyNumber : null,
+                'plot_type' => $plotType !== '' ? $plotType : null,
+                'area_sqm' => $areaSqm,
+                'zone' => $zone,
+                'industry_type' => $industryType !== '' ? $industryType : null,
+                'latitude' => $latitudeInput !== '' ? floatval($latitudeInput) : null,
+                'longitude' => $longitudeInput !== '' ? floatval($longitudeInput) : null,
+                'base_price' => $basePrice,
+                'sector' => $sector !== '' ? $sector : null,
+                'region_id' => $regionId,
+                'location_lat' => $locationLatInput !== '' ? floatval($locationLatInput) : null,
+                'location_lng' => $locationLngInput !== '' ? floatval($locationLngInput) : null,
+                'boundary_coordinates' => $boundaryCoordinates !== '' ? $boundaryCoordinates : null,
+                'base_price_per_sqm' => $basePricePerSqm,
+                'status' => $status !== '' ? $status : 'available',
+                'infrastructure_type' => $infrastructureType !== '' ? $infrastructureType : null,
+                'utilities_available' => $utilitiesPayload,
+                'remarks' => $remarks !== '' ? $remarks : null,
+                'created_at' => date('Y-m-d H:i:s'),
+                'updated_at' => date('Y-m-d H:i:s')
+            ]);
+
+            $_SESSION['flash_success'] = 'Land bank plot added successfully.';
+        }
         if ($action === 'create_notification') {
             $title = sanitize($_POST['notification_title'] ?? '');
             $publishDate = $_POST['publish_date'] ?? date('Y-m-d');
@@ -84,6 +163,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     exit;
 }
 
+$regions = $db->fetchAll("SELECT id, name FROM regions ORDER BY name ASC");
 $plots = $db->fetchAll("SELECT lb.*, r.name as region_name FROM land_banks lb LEFT JOIN regions r ON lb.region_id = r.id ORDER BY lb.id DESC LIMIT 100");
 $notifications = $db->fetchAll("SELECT n.*, (SELECT COUNT(*) FROM la_notification_plots np WHERE np.notification_id = n.id) AS total_plots FROM la_notifications n ORDER BY n.id DESC LIMIT 50");
 $notificationPlots = $db->fetchAll("SELECT np.*, n.notification_no, lb.plot_number FROM la_notification_plots np INNER JOIN la_notifications n ON n.id = np.notification_id INNER JOIN land_banks lb ON lb.id = np.plot_id ORDER BY np.id DESC LIMIT 100");
@@ -94,9 +174,140 @@ ob_start();
 <div class="card">
     <div class="card-header">
         <h3><i class="fas fa-map-marked-alt"></i> Land Bank Management</h3>
-        <button class="btn btn-primary btn-sm" onclick="alert('Add plot form')"><i class="fas fa-plus"></i> Add Plot</button>
+        <a class="btn btn-primary btn-sm" href="<?php echo APP_URL; ?>/admin/?page=land-bank&show=add"><i class="fas fa-plus"></i> Add Plot</a>
     </div>
     <div class="card-body">
+        <?php if ($showAddPlotForm): ?>
+        <div class="card" style="margin-bottom:16px;">
+            <div class="card-header">
+                <strong>Add Land Bank Plot</strong>
+            </div>
+            <div class="card-body">
+                <form method="post">
+                    <input type="hidden" name="action" value="add_plot">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Plot Number *</label>
+                            <input type="text" name="plot_number" class="form-control" placeholder="PLOT-0101" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Plot No</label>
+                            <input type="text" name="plot_no" class="form-control" placeholder="Internal plot code">
+                        </div>
+                        <div class="form-group">
+                            <label>Survey Number</label>
+                            <input type="text" name="survey_number" class="form-control">
+                        </div>
+                        <div class="form-group">
+                            <label>Plot Type</label>
+                            <select name="plot_type" class="form-control">
+                                <option value="industrial">Industrial</option>
+                                <option value="commercial">Commercial</option>
+                                <option value="mixed_use">Mixed Use</option>
+                                <option value="institutional">Institutional</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Area (sqm) *</label>
+                            <input type="number" name="area_sqm" class="form-control" step="0.01" min="0" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Area (sqft)</label>
+                            <input type="number" name="area_sqft" class="form-control" step="0.01" min="0">
+                        </div>
+                        <div class="form-group">
+                            <label>Zone *</label>
+                            <input type="text" name="zone" class="form-control" placeholder="Ranchi / Jamshedpur / etc." required>
+                        </div>
+                        <div class="form-group">
+                            <label>Industry Type</label>
+                            <input type="text" name="industry_type" class="form-control" placeholder="Manufacturing / IT-ITES / etc.">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Region *</label>
+                            <select name="region_id" class="form-control" required>
+                                <option value="">Select region</option>
+                                <?php foreach ($regions as $region): ?>
+                                    <option value="<?php echo intval($region['id']); ?>"><?php echo e($region['name']); ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Sector</label>
+                            <input type="text" name="sector" class="form-control">
+                        </div>
+                        <div class="form-group">
+                            <label>Status</label>
+                            <select name="status" class="form-control">
+                                <option value="available">Available</option>
+                                <option value="reserved">Reserved</option>
+                                <option value="allotted">Allotted</option>
+                                <option value="under_maintenance">Under Maintenance</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Infrastructure Type</label>
+                            <select name="infrastructure_type" class="form-control">
+                                <option value="raw_land">Raw Land</option>
+                                <option value="developed_land">Developed Land</option>
+                                <option value="shed">Shed</option>
+                                <option value="plug_and_play">Plug &amp; Play</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Latitude</label>
+                            <input type="number" name="latitude" class="form-control" step="0.000001">
+                        </div>
+                        <div class="form-group">
+                            <label>Longitude</label>
+                            <input type="number" name="longitude" class="form-control" step="0.000001">
+                        </div>
+                        <div class="form-group">
+                            <label>Location Lat</label>
+                            <input type="number" name="location_lat" class="form-control" step="0.000001">
+                        </div>
+                        <div class="form-group">
+                            <label>Location Lng</label>
+                            <input type="number" name="location_lng" class="form-control" step="0.000001">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Base Price</label>
+                            <input type="number" name="base_price" class="form-control" step="0.01" min="0">
+                        </div>
+                        <div class="form-group">
+                            <label>Base Price per sqm</label>
+                            <input type="number" name="base_price_per_sqm" class="form-control" step="0.01" min="0">
+                        </div>
+                        <div class="form-group" style="flex:2;">
+                            <label>Utilities Available</label>
+                            <input type="text" name="utilities_available" class="form-control" placeholder="Electricity, Water, Road access">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Boundary Coordinates</label>
+                        <textarea name="boundary_coordinates" class="form-control" rows="3" placeholder='GeoJSON / WKT / coordinate string'></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>Remarks</label>
+                        <textarea name="remarks" class="form-control" rows="3"></textarea>
+                    </div>
+                    <div style="display:flex; gap:8px;">
+                        <button class="btn btn-primary" type="submit">Save Plot</button>
+                        <a class="btn btn-outline" href="<?php echo APP_URL; ?>/admin/?page=land-bank">Cancel</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+        <?php endif; ?>
+
         <div class="card" style="margin-bottom:16px;">
             <div class="card-header"><strong>Create Plot Notification</strong></div>
             <div class="card-body">

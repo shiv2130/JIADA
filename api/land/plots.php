@@ -32,7 +32,8 @@ function getPlots() {
     $minArea = getGet('min_area', null);
     $maxArea = getGet('max_area', null);
     $page = max(1, intval(getGet('page', 1)));
-    $perPage = PER_PAGE;
+    $requestedPerPage = intval(getGet('per_page', PER_PAGE));
+    $perPage = $requestedPerPage > 0 ? min($requestedPerPage, 500) : PER_PAGE;
     
     // Build query
     $where = [];
