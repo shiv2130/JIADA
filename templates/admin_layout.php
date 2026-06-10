@@ -262,38 +262,50 @@ $displayRole = $roleLabels[$role] ?? ucwords(str_replace('_', ' ', $role));
                 if ($isCounterClerk) {
                     $navItems[] = ['section' => 'COUNTER CLERK', 'items' => [
                         ['url' => '/admin/?page=applications', 'icon' => 'file-alt', 'title' => 'Applications Queue', 'key' => 'applications'],
-                        ['url' => '/admin/?page=land-bank', 'icon' => 'map', 'title' => 'Land Bank', 'key' => 'land-bank'],
                         ['url' => '/admin/?page=notifications', 'icon' => 'bell', 'title' => 'Notifications', 'key' => 'notifications'],
                         ['url' => '/admin/?page=profile', 'icon' => 'user-circle', 'title' => 'My Profile', 'key' => 'profile'],
+                    ]];
+                    $navItems[] = ['section' => 'MASTER MANAGEMENT', 'items' => [
+                        ['url' => '/admin/?page=regions', 'icon' => 'map-signs', 'title' => 'Regions & Districts', 'key' => 'regions'],
+                        ['url' => '/admin/?page=land-bank', 'icon' => 'map', 'title' => 'Land Bank', 'key' => 'land-bank'],
                     ]];
                 } elseif ($isIeo) {
                     $navItems[] = ['section' => 'INDUSTRIAL EXTENSION OFFICER', 'items' => [
                         ['url' => '/admin/?page=applications', 'icon' => 'file-alt', 'title' => 'Applications Queue', 'key' => 'applications'],
-                        ['url' => '/admin/?page=land-bank', 'icon' => 'map', 'title' => 'Land Bank', 'key' => 'land-bank'],
                         ['url' => '/admin/?page=notifications', 'icon' => 'bell', 'title' => 'Notifications', 'key' => 'notifications'],
                         ['url' => '/admin/?page=profile', 'icon' => 'user-circle', 'title' => 'My Profile', 'key' => 'profile'],
+                    ]];
+                    $navItems[] = ['section' => 'MASTER MANAGEMENT', 'items' => [
+                        ['url' => '/admin/?page=regions', 'icon' => 'map-signs', 'title' => 'Regions & Districts', 'key' => 'regions'],
+                        ['url' => '/admin/?page=land-bank', 'icon' => 'map', 'title' => 'Land Bank', 'key' => 'land-bank'],
                     ]];
                 } elseif ($isRd) {
                     $navItems[] = ['section' => 'REGIONAL DIRECTOR', 'items' => [
                         ['url' => '/admin/?page=applications', 'icon' => 'gavel', 'title' => 'Decision Queue', 'key' => 'applications'],
                         ['url' => '/admin/?page=allotments', 'icon' => 'file-signature', 'title' => 'Allotment Decisions', 'key' => 'allotments'],
                         ['url' => '/admin/?page=bids', 'icon' => 'gavel', 'title' => 'Bidding', 'key' => 'bids'],
-                        ['url' => '/admin/?page=land-bank', 'icon' => 'map', 'title' => 'Land Bank', 'key' => 'land-bank'],
                         ['url' => '/admin/?page=notifications', 'icon' => 'bell', 'title' => 'Notifications', 'key' => 'notifications'],
                         ['url' => '/admin/?page=profile', 'icon' => 'user-circle', 'title' => 'My Profile', 'key' => 'profile'],
                     ]];
-                } elseif ($isOfficer) {
-                    $navItems[] = ['section' => 'MANAGEMENT', 'items' => [
-                        ['url' => '/admin/?page=dashboard', 'icon' => 'dashboard', 'title' => 'Dashboard', 'key' => 'dashboard'],
-                        ['url' => '/admin/?page=users', 'icon' => 'users', 'title' => 'User Management', 'key' => 'users'],
+                    $navItems[] = ['section' => 'MASTER MANAGEMENT', 'items' => [
+                        ['url' => '/admin/?page=regions', 'icon' => 'map-signs', 'title' => 'Regions & Districts', 'key' => 'regions'],
                         ['url' => '/admin/?page=land-bank', 'icon' => 'map', 'title' => 'Land Bank', 'key' => 'land-bank'],
+                    ]];
+                } elseif ($isOfficer) {
+                    $navItems[] = ['section' => 'MASTER MANAGEMENT', 'items' => [
+                        ['url' => '/admin/?page=users', 'icon' => 'users', 'title' => 'User Management', 'key' => 'users'],
+                        ['url' => '/admin/?page=regions', 'icon' => 'map-signs', 'title' => 'Regions & Districts', 'key' => 'regions'],
+                        ['url' => '/admin/?page=land-bank', 'icon' => 'map', 'title' => 'Land Bank', 'key' => 'land-bank'],
+                        ['url' => '/admin/?page=plug-play', 'icon' => 'building', 'title' => 'Plug & Play Units', 'key' => 'plug-play'],
+                    ]];
+
+                    $navItems[] = ['section' => 'APPLICATION WORKFLOW', 'items' => [
                         ['url' => '/admin/?page=applications', 'icon' => 'file-alt', 'title' => 'Applications', 'key' => 'applications'],
                         ['url' => '/admin/?page=allotments', 'icon' => 'file-signature', 'title' => 'Allotments', 'key' => 'allotments'],
                         ['url' => '/admin/?page=possession', 'icon' => 'key', 'title' => 'Possession', 'key' => 'possession'],
                         ['url' => '/admin/?page=registry', 'icon' => 'book', 'title' => 'Registry', 'key' => 'registry'],
                         ['url' => '/admin/?page=payments', 'icon' => 'rupee-sign', 'title' => 'Payments & Revenue', 'key' => 'payments'],
                         ['url' => '/admin/?page=bids', 'icon' => 'gavel', 'title' => 'Bidding', 'key' => 'bids'],
-                        ['url' => '/admin/?page=plug-play', 'icon' => 'building', 'title' => 'Plug & Play Units', 'key' => 'plug-play'],
                     ]];
                     
                     $navItems[] = ['section' => 'SERVICES', 'items' => [

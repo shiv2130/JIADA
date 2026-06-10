@@ -292,8 +292,13 @@ ob_start();
                         </div>
                     </div>
                     <div class="form-group">
-                        <label>Boundary Coordinates</label>
-                        <textarea name="boundary_coordinates" class="form-control" rows="3" placeholder='GeoJSON / WKT / coordinate string'></textarea>
+                        <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:6px;">
+                            <label style="margin:0;">Boundary Coordinates</label>
+                            <button type="button" class="btn btn-sm btn-outline" id="openBoundaryPicker">
+                                <i class="fas fa-draw-polygon"></i> Select on Map
+                            </button>
+                        </div>
+                        <textarea id="boundaryCoordinates" name="boundary_coordinates" class="form-control" rows="3" placeholder='GeoJSON coordinates will appear here after drawing on map'></textarea>
                     </div>
                     <div class="form-group">
                         <label>Remarks</label>
@@ -307,6 +312,26 @@ ob_start();
             </div>
         </div>
         <?php endif; ?>
+
+        <div id="boundaryPickerModal" class="boundary-picker-modal" aria-hidden="true">
+            <div class="boundary-picker-dialog">
+                <div class="boundary-picker-header">
+                    <div>
+                        <strong>Select Plot Boundary</strong>
+                        <small>Draw one polygon around the plot, then use the selected boundary.</small>
+                    </div>
+                    <button type="button" class="boundary-picker-close" id="closeBoundaryPicker" aria-label="Close boundary picker">&times;</button>
+                </div>
+                <div id="boundaryPickerMap"></div>
+                <div class="boundary-picker-footer">
+                    <span id="boundaryPickerStatus">Use the polygon tool to mark plot corners.</span>
+                    <div style="display:flex; gap:8px;">
+                        <button type="button" class="btn btn-outline" id="clearBoundaryPolygon">Clear</button>
+                        <button type="button" class="btn btn-primary" id="useBoundaryPolygon">Use Boundary</button>
+                    </div>
+                </div>
+            </div>
+        </div>
 
         <div class="card" style="margin-bottom:16px;">
             <div class="card-header"><strong>Create Plot Notification</strong></div>
@@ -482,5 +507,206 @@ ob_start();
 </div>
 <?php
 $content = ob_get_clean();
+$scripts = ($scripts ?? '') . <<<'HTML'
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
+<style>
+.boundary-picker-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 3000;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background: rgba(15, 23, 42, 0.55);
+}
+.boundary-picker-modal.open { display: flex; }
+.boundary-picker-dialog {
+    width: min(1080px, 96vw);
+    background: #fff;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 24px 60px rgba(15, 23, 42, 0.28);
+}
+.boundary-picker-header,
+.boundary-picker-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 14px 16px;
+    border-bottom: 1px solid #e5e7eb;
+}
+.boundary-picker-footer {
+    border-top: 1px solid #e5e7eb;
+    border-bottom: 0;
+}
+.boundary-picker-header small {
+    display: block;
+    margin-top: 2px;
+    color: #64748b;
+}
+.boundary-picker-close {
+    border: 0;
+    background: transparent;
+    color: #334155;
+    cursor: pointer;
+    font-size: 28px;
+    line-height: 1;
+}
+#boundaryPickerMap {
+    height: min(64vh, 620px);
+    width: 100%;
+}
+#boundaryPickerStatus {
+    color: #64748b;
+    font-size: 13px;
+}
+</style>
+<script>
+(function () {
+    const openButton = document.getElementById('openBoundaryPicker');
+    const closeButton = document.getElementById('closeBoundaryPicker');
+    const modal = document.getElementById('boundaryPickerModal');
+    const textarea = document.getElementById('boundaryCoordinates');
+    const clearButton = document.getElementById('clearBoundaryPolygon');
+    const useButton = document.getElementById('useBoundaryPolygon');
+    const status = document.getElementById('boundaryPickerStatus');
+
+    if (!openButton || !modal || typeof L === 'undefined') {
+        return;
+    }
+
+    let pickerMap = null;
+    let drawnItems = null;
+    let selectedCoordinates = null;
+
+    function getInitialCenter() {
+        const lat = parseFloat(document.querySelector('[name="latitude"]')?.value || document.querySelector('[name="location_lat"]')?.value || '');
+        const lng = parseFloat(document.querySelector('[name="longitude"]')?.value || document.querySelector('[name="location_lng"]')?.value || '');
+        if (Number.isFinite(lat) && Number.isFinite(lng)) {
+            return [lat, lng];
+        }
+        return [23.3441, 85.3096];
+    }
+
+    function setStatus(message) {
+        if (status) {
+            status.textContent = message;
+        }
+    }
+
+    function latLngsToGeoJsonCoordinates(latlngs) {
+        const ring = latlngs.map((point) => [
+            Number(point.lng.toFixed(6)),
+            Number(point.lat.toFixed(6))
+        ]);
+
+        if (ring.length && (ring[0][0] !== ring[ring.length - 1][0] || ring[0][1] !== ring[ring.length - 1][1])) {
+            ring.push([...ring[0]]);
+        }
+
+        return [ring];
+    }
+
+    function syncCoordinatesFromLayer(layer) {
+        const latlngs = layer.getLatLngs()[0] || [];
+        selectedCoordinates = latLngsToGeoJsonCoordinates(latlngs);
+        setStatus(selectedCoordinates[0].length + ' boundary points selected.');
+    }
+
+    function initMap() {
+        if (pickerMap) {
+            setTimeout(() => pickerMap.invalidateSize(), 120);
+            return;
+        }
+
+        pickerMap = L.map('boundaryPickerMap').setView(getInitialCenter(), 13);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap contributors'
+        }).addTo(pickerMap);
+
+        drawnItems = new L.FeatureGroup();
+        pickerMap.addLayer(drawnItems);
+
+        const drawControl = new L.Control.Draw({
+            draw: {
+                polygon: {
+                    allowIntersection: false,
+                    showArea: true,
+                    shapeOptions: {
+                        color: '#1a5276',
+                        weight: 3,
+                        fillColor: '#3498db',
+                        fillOpacity: 0.18
+                    }
+                },
+                rectangle: false,
+                circle: false,
+                marker: false,
+                polyline: false,
+                circlemarker: false
+            },
+            edit: {
+                featureGroup: drawnItems
+            }
+        });
+        pickerMap.addControl(drawControl);
+
+        pickerMap.on(L.Draw.Event.CREATED, function (event) {
+            drawnItems.clearLayers();
+            drawnItems.addLayer(event.layer);
+            syncCoordinatesFromLayer(event.layer);
+        });
+
+        pickerMap.on(L.Draw.Event.EDITED, function (event) {
+            event.layers.eachLayer(syncCoordinatesFromLayer);
+        });
+
+        pickerMap.on(L.Draw.Event.DELETED, function () {
+            selectedCoordinates = null;
+            setStatus('Boundary cleared. Draw a new polygon.');
+        });
+    }
+
+    openButton.addEventListener('click', function () {
+        modal.classList.add('open');
+        modal.setAttribute('aria-hidden', 'false');
+        initMap();
+        pickerMap.setView(getInitialCenter(), pickerMap.getZoom());
+        setTimeout(() => pickerMap.invalidateSize(), 120);
+    });
+
+    closeButton?.addEventListener('click', function () {
+        modal.classList.remove('open');
+        modal.setAttribute('aria-hidden', 'true');
+    });
+
+    modal.addEventListener('click', function (event) {
+        if (event.target === modal) {
+            modal.classList.remove('open');
+            modal.setAttribute('aria-hidden', 'true');
+        }
+    });
+
+    clearButton?.addEventListener('click', function () {
+        drawnItems?.clearLayers();
+        selectedCoordinates = null;
+        setStatus('Boundary cleared. Draw a new polygon.');
+    });
+
+    useButton?.addEventListener('click', function () {
+        if (!selectedCoordinates) {
+            setStatus('Draw a polygon before using the boundary.');
+            return;
+        }
+        textarea.value = JSON.stringify(selectedCoordinates);
+        modal.classList.remove('open');
+        modal.setAttribute('aria-hidden', 'true');
+    });
+})();
+</script>
+HTML;
 include TEMPLATES_PATH . '/admin_layout.php';
 ?>

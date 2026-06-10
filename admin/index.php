@@ -26,7 +26,7 @@ switch ($page) {
             $password = $_POST['password'] ?? '';
             
             $db = getDB();
-            $user = $db->fetchOne("SELECT * FROM users WHERE (email = ? OR mobile = ?) AND user_type IN ('superadmin', 'admin', 'jiada_officer', 'regional_officer', 'rd', 'counter_clerk', 'ieo')", [$email, $email]);
+            $user = $db->fetchOne("SELECT * FROM users WHERE (email = ? OR mobile = ?) AND user_type IN ('superadmin', 'admin', 'jiada_officer', 'regional_officer', 'do', 'rdd', 'rd', 'counter_clerk', 'ieo')", [$email, $email]);
             
             if (!$user) {
                 $error = 'Invalid credentials. User not found.';
@@ -139,6 +139,11 @@ switch ($page) {
     case 'land-bank':
         if (!isset($_SESSION['admin_id'])) { header('Location: ' . APP_URL . '/admin/?page=login'); exit; }
         include __DIR__ . '/../pages/admin/land-bank.php';
+        break;
+
+    case 'regions':
+        if (!isset($_SESSION['admin_id'])) { header('Location: ' . APP_URL . '/admin/?page=login'); exit; }
+        include __DIR__ . '/../pages/admin/regions.php';
         break;
         
     case 'applications':
