@@ -140,6 +140,11 @@ switch ($page) {
         if (!isset($_SESSION['admin_id'])) { header('Location: ' . APP_URL . '/admin/?page=login'); exit; }
         include __DIR__ . '/../pages/admin/land-bank.php';
         break;
+
+    case 'master-dashboard':
+        if (!isset($_SESSION['admin_id'])) { header('Location: ' . APP_URL . '/admin/?page=login'); exit; }
+        include __DIR__ . '/../pages/admin/master-dashboard.php';
+        break;
         
     case 'applications':
         if (!isset($_SESSION['admin_id'])) { header('Location: ' . APP_URL . '/admin/?page=login'); exit; }

@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 $pageTitle = "Admin Dashboard";
 $currentPage = 'dashboard';
 require_once __DIR__ . '/../../config/config.php';
@@ -30,6 +30,28 @@ $stats = [
     'open_tickets' => $db->fetchOne("SELECT COUNT(*) as c FROM utility_tickets WHERE status NOT IN ('closed','resolved')$regionAnd")['c'] ?? 0,
     'court_cases' => $db->fetchOne("SELECT COUNT(*) as c FROM court_cases WHERE case_status IN ('pending','in_progress')")['c'] ?? 0,
 ];
+
+$plotStatus = $db->fetchAll("SELECT status, COUNT(*) as c FROM land_banks$regionWhere GROUP BY status");
+
+$recentBids = $db->fetchAll("
+        SELECT b.id, bp.bid_amount, bp.status, b.bid_end_date, 
+               u.name as user_name, lb.plot_number
+        FROM bid_participants bp
+        JOIN bids b ON bp.bid_id = b.id
+        JOIN users u ON bp.user_id = u.id
+        JOIN land_banks lb ON b.plot_id = lb.id
+        ORDER BY bp.id DESC
+        LIMIT 5
+");
+
+$recentCourtCases = $db->fetchAll("
+        SELECT c.id, c.case_number, c.title, c.case_status, c.filing_date, c.next_hearing_date,
+               u.name as user_name
+        FROM court_cases c
+        LEFT JOIN users u ON c.created_by = u.id
+        ORDER BY c.id DESC
+        LIMIT 5
+");
 
 // KPI data
 $appByStatus = $db->fetchAll("SELECT status, COUNT(*) as c FROM land_applications$regionWhere GROUP BY status");
@@ -487,7 +509,7 @@ ob_start();
     </a>
      <a href="<?php echo APP_URL; ?>/admin/?page=payments" class="card" style="padding: 20px; text-align: center; background:  #f0e3f5; text-decoration: none; color: inherit; display: block;">
         <i class="fas fa-indian-rupee-sign fa-2x" style="color: #7b1fa2;"></i>
-        <h3 style="margin: 10px 0;">₹<?php echo number_format($stats['total_revenue'], 2); ?></h3>
+        <h3 style="margin: 10px 0;">â‚¹<?php echo number_format($stats['total_revenue'], 2); ?></h3>
         <p style="color: var(--gray);">Revenue Collected</p>
     </a>
     <a href="<?php echo APP_URL; ?>/admin/?page=grievances" class="card" style="padding: 20px; text-align: center; background: #fce4ec; text-decoration: none; color: inherit; display: block;">
@@ -584,7 +606,7 @@ ob_start();
                     <td><?php echo e($p['receipt_no'] ?? $p['payment_id'] ?? '-'); ?></td>
                     <td><?php echo e($p['user_name'] ?? '-'); ?></td>
                     <td><?php echo e($p['payment_for'] ?? $p['payment_type'] ?? '-'); ?></td>
-                    <td>₹<?php echo number_format($p['amount'], 2); ?></td>
+                    <td>â‚¹<?php echo number_format($p['amount'], 2); ?></td>
                     <td><span class="badge badge-<?php echo $p['status'] === 'paid' ? 'success' : ($p['status'] === 'pending' ? 'warning' : 'info'); ?>"><?php echo e($p['status']); ?></span></td>
                     <td><?php echo date('d/m/Y', strtotime($p['created_at'])); ?></td>
                 </tr>
@@ -645,3 +667,4 @@ endif;
 $content = ob_get_clean();
 include TEMPLATES_PATH . '/admin_layout.php';
 ?>
+

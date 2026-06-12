@@ -285,6 +285,7 @@ $displayRole = $roleLabels[$role] ?? ucwords(str_replace('_', ' ', $role));
                 } elseif ($isOfficer) {
                     $navItems[] = ['section' => 'MANAGEMENT', 'items' => [
                         ['url' => '/admin/?page=dashboard', 'icon' => 'dashboard', 'title' => 'Dashboard', 'key' => 'dashboard'],
+                        ['url' => '/admin/?page=master-dashboard', 'icon' => 'layer-group', 'title' => 'Master Sheets', 'key' => 'master-dashboard'],
                         ['url' => '/admin/?page=users', 'icon' => 'users', 'title' => 'User Management', 'key' => 'users'],
                         ['url' => '/admin/?page=land-bank', 'icon' => 'map', 'title' => 'Land Bank', 'key' => 'land-bank'],
                         ['url' => '/admin/?page=applications', 'icon' => 'file-alt', 'title' => 'Applications', 'key' => 'applications'],
