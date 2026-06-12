@@ -287,8 +287,16 @@ $displayRole = $roleLabels[$role] ?? ucwords(str_replace('_', ' ', $role));
                         ['url' => '/admin/?page=notifications', 'icon' => 'bell', 'title' => 'Notifications', 'key' => 'notifications'],
                         ['url' => '/admin/?page=profile', 'icon' => 'user-circle', 'title' => 'My Profile', 'key' => 'profile'],
                     ]];
+<<<<<<< HEAD
                     $navItems[] = ['section' => 'MASTER MANAGEMENT', 'items' => [
                         ['url' => '/admin/?page=regions', 'icon' => 'map-signs', 'title' => 'Regions & Districts', 'key' => 'regions'],
+=======
+                } elseif ($isOfficer) {
+                    $navItems[] = ['section' => 'MANAGEMENT', 'items' => [
+                        ['url' => '/admin/?page=dashboard', 'icon' => 'dashboard', 'title' => 'Dashboard', 'key' => 'dashboard'],
+                        ['url' => '/admin/?page=master-dashboard', 'icon' => 'layer-group', 'title' => 'Master Sheets', 'key' => 'master-dashboard'],
+                        ['url' => '/admin/?page=users', 'icon' => 'users', 'title' => 'User Management', 'key' => 'users'],
+>>>>>>> origin/Tony-Stark
                         ['url' => '/admin/?page=land-bank', 'icon' => 'map', 'title' => 'Land Bank', 'key' => 'land-bank'],
                     ]];
                 } elseif ($isOfficer) {

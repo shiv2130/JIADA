@@ -141,9 +141,15 @@ switch ($page) {
         include __DIR__ . '/../pages/admin/land-bank.php';
         break;
 
+<<<<<<< HEAD
     case 'regions':
         if (!isset($_SESSION['admin_id'])) { header('Location: ' . APP_URL . '/admin/?page=login'); exit; }
         include __DIR__ . '/../pages/admin/regions.php';
+=======
+    case 'master-dashboard':
+        if (!isset($_SESSION['admin_id'])) { header('Location: ' . APP_URL . '/admin/?page=login'); exit; }
+        include __DIR__ . '/../pages/admin/master-dashboard.php';
+>>>>>>> origin/Tony-Stark
         break;
         
     case 'applications':

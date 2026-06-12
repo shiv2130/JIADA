@@ -158,6 +158,10 @@ $routes = [
     '/api/hrms/payroll' => 'api/hrms/payroll.php',
     // BRAP tracker
     '/api/brap/items' => 'api/brap/items.php',
+    // Master Sheets API
+    '/api/master/cascade' => 'api/master/cascade.php',
+    '/api/master/plot' => 'api/master/plot.php',
+
     // Survey GIS
     '/api/survey/parcels' => 'api/survey/parcels.php',
     '/api/survey/verify' => 'api/survey/verify.php',
