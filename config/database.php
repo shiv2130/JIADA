@@ -17,7 +17,7 @@ class Database {
     private $host = 'localhost';
     private $username = 'root';
     private $password = '';
-    private $database = 'jiada_portal';
+    private $database = 'jiada';
     private $charset = 'utf8mb4';
     
     // Connection instance

@@ -265,20 +265,14 @@ $displayRole = $roleLabels[$role] ?? ucwords(str_replace('_', ' ', $role));
                         ['url' => '/admin/?page=notifications', 'icon' => 'bell', 'title' => 'Notifications', 'key' => 'notifications'],
                         ['url' => '/admin/?page=profile', 'icon' => 'user-circle', 'title' => 'My Profile', 'key' => 'profile'],
                     ]];
-                    $navItems[] = ['section' => 'MASTER MANAGEMENT', 'items' => [
-                        ['url' => '/admin/?page=regions', 'icon' => 'map-signs', 'title' => 'Regions & Districts', 'key' => 'regions'],
-                        ['url' => '/admin/?page=land-bank', 'icon' => 'map', 'title' => 'Land Bank', 'key' => 'land-bank'],
-                    ]];
+                    $navItems[] = ['section' => 'MASTER MANAGEMENT', 'items' => masterManagementMenuItems($isAdmin)];
                 } elseif ($isIeo) {
                     $navItems[] = ['section' => 'INDUSTRIAL EXTENSION OFFICER', 'items' => [
                         ['url' => '/admin/?page=applications', 'icon' => 'file-alt', 'title' => 'Applications Queue', 'key' => 'applications'],
                         ['url' => '/admin/?page=notifications', 'icon' => 'bell', 'title' => 'Notifications', 'key' => 'notifications'],
                         ['url' => '/admin/?page=profile', 'icon' => 'user-circle', 'title' => 'My Profile', 'key' => 'profile'],
                     ]];
-                    $navItems[] = ['section' => 'MASTER MANAGEMENT', 'items' => [
-                        ['url' => '/admin/?page=regions', 'icon' => 'map-signs', 'title' => 'Regions & Districts', 'key' => 'regions'],
-                        ['url' => '/admin/?page=land-bank', 'icon' => 'map', 'title' => 'Land Bank', 'key' => 'land-bank'],
-                    ]];
+                    $navItems[] = ['section' => 'MASTER MANAGEMENT', 'items' => masterManagementMenuItems($isAdmin)];
                 } elseif ($isRd) {
                     $navItems[] = ['section' => 'REGIONAL DIRECTOR', 'items' => [
                         ['url' => '/admin/?page=applications', 'icon' => 'gavel', 'title' => 'Decision Queue', 'key' => 'applications'],
@@ -287,25 +281,9 @@ $displayRole = $roleLabels[$role] ?? ucwords(str_replace('_', ' ', $role));
                         ['url' => '/admin/?page=notifications', 'icon' => 'bell', 'title' => 'Notifications', 'key' => 'notifications'],
                         ['url' => '/admin/?page=profile', 'icon' => 'user-circle', 'title' => 'My Profile', 'key' => 'profile'],
                     ]];
-<<<<<<< HEAD
-                    $navItems[] = ['section' => 'MASTER MANAGEMENT', 'items' => [
-                        ['url' => '/admin/?page=regions', 'icon' => 'map-signs', 'title' => 'Regions & Districts', 'key' => 'regions'],
-=======
+                    $navItems[] = ['section' => 'MASTER MANAGEMENT', 'items' => masterManagementMenuItems($isAdmin)];
                 } elseif ($isOfficer) {
-                    $navItems[] = ['section' => 'MANAGEMENT', 'items' => [
-                        ['url' => '/admin/?page=dashboard', 'icon' => 'dashboard', 'title' => 'Dashboard', 'key' => 'dashboard'],
-                        ['url' => '/admin/?page=master-dashboard', 'icon' => 'layer-group', 'title' => 'Master Sheets', 'key' => 'master-dashboard'],
-                        ['url' => '/admin/?page=users', 'icon' => 'users', 'title' => 'User Management', 'key' => 'users'],
->>>>>>> origin/Tony-Stark
-                        ['url' => '/admin/?page=land-bank', 'icon' => 'map', 'title' => 'Land Bank', 'key' => 'land-bank'],
-                    ]];
-                } elseif ($isOfficer) {
-                    $navItems[] = ['section' => 'MASTER MANAGEMENT', 'items' => [
-                        ['url' => '/admin/?page=users', 'icon' => 'users', 'title' => 'User Management', 'key' => 'users'],
-                        ['url' => '/admin/?page=regions', 'icon' => 'map-signs', 'title' => 'Regions & Districts', 'key' => 'regions'],
-                        ['url' => '/admin/?page=land-bank', 'icon' => 'map', 'title' => 'Land Bank', 'key' => 'land-bank'],
-                        ['url' => '/admin/?page=plug-play', 'icon' => 'building', 'title' => 'Plug & Play Units', 'key' => 'plug-play'],
-                    ]];
+                    $navItems[] = ['section' => 'MASTER MANAGEMENT', 'items' => masterManagementMenuItems($isAdmin)];
 
                     $navItems[] = ['section' => 'APPLICATION WORKFLOW', 'items' => [
                         ['url' => '/admin/?page=applications', 'icon' => 'file-alt', 'title' => 'Applications', 'key' => 'applications'],
@@ -341,15 +319,86 @@ $displayRole = $roleLabels[$role] ?? ucwords(str_replace('_', ' ', $role));
                     ]];
                 }
                 
+                function masterManagementMenuItems($includeUsers = false) {
+                    $children = [
+                        ['url' => '/admin/?page=master-dashboard&tab=masters#regional-office', 'icon' => 'building-columns', 'title' => 'Regional Offices', 'key' => 'master-regional-office'],
+                        ['url' => '/admin/?page=master-dashboard&tab=masters#district-master', 'icon' => 'map-signs', 'title' => 'Regions & Districts', 'key' => 'regions'],
+                        ['url' => '/admin/?page=master-dashboard&tab=blocks', 'icon' => 'border-all', 'title' => 'Blocks', 'key' => 'blocks'],
+                        ['url' => '/admin/?page=master-dashboard&tab=masters#industrial-area', 'icon' => 'industry', 'title' => 'Industrial Areas', 'key' => 'industrial-area'],
+                        ['url' => '/admin/?page=land-bank', 'icon' => 'map', 'title' => 'Land Bank', 'key' => 'land-bank'],
+                        ['url' => '/admin/?page=plug-play', 'icon' => 'building', 'title' => 'Plug & Play Units', 'key' => 'plug-play'],
+                        ['url' => '/admin/?page=grievances', 'icon' => 'comment-dots', 'title' => 'Grievances', 'key' => 'grievances'],
+                        ['url' => '/admin/?page=utilities', 'icon' => 'tools', 'title' => 'Utility Tickets', 'key' => 'utilities'],
+                    ];
+                    if ($includeUsers) {
+                        array_unshift($children, ['url' => '/admin/?page=users', 'icon' => 'users', 'title' => 'User Management', 'key' => 'users']);
+                    }
+                    return [
+                        [
+                            'url' => '/admin/?page=master-dashboard&tab=overview',
+                            'icon' => 'layer-group',
+                            'title' => 'Master Sheets',
+                            'key' => 'master-dashboard',
+                            'children' => $children,
+                        ],
+                    ];
+                }
+
+                function adminNavUrlPage($url) {
+                    $parts = parse_url($url);
+                    if (empty($parts['query'])) {
+                        return trim($parts['path'] ?? '', '/');
+                    }
+                    parse_str($parts['query'], $query);
+                    return $query['page'] ?? trim($parts['path'] ?? '', '/');
+                }
+
+                function adminNavItemActive($item, $currentPage) {
+                    $url = $item['url'] ?? '';
+                    $itemPage = adminNavUrlPage($url);
+                    if ($itemPage && $itemPage === ($currentPage ?? '')) {
+                        $parts = parse_url($url);
+                        $query = [];
+                        if (!empty($parts['query'])) {
+                            parse_str($parts['query'], $query);
+                        }
+                        if (isset($query['tab']) && ($_GET['tab'] ?? '') !== $query['tab']) {
+                            return false;
+                        }
+                        return true;
+                    }
+                    foreach (($item['children'] ?? []) as $child) {
+                        if (adminNavItemActive($child, $currentPage)) {
+                            return true;
+                        }
+                    }
+                    return false;
+                }
+
                 foreach ($navItems as $section): ?>
                 <div class="nav-section-title"><?php echo $section['section']; ?></div>
                 <?php foreach ($section['items'] as $item):
-                    $active = trim(strstr($currentPage ?? '', '?', true), '/') === trim($item['url'], '/') || ($currentPage ?? '') === $item['url']; ?>
-                <a href="<?php echo htmlspecialchars(APP_URL . $item['url']); ?>" class="nav-item <?php echo $active ? 'active' : ''; ?>" data-key="<?php echo $item['key']; ?>">
+                    $active = adminNavItemActive($item, $currentPage ?? '');
+                    $hasChildren = !empty($item['children']);
+                    $submenuId = 'submenu-' . preg_replace('/[^a-z0-9_-]/i', '-', $item['key']);
+                ?>
+                <a href="<?php echo $hasChildren ? '#' : htmlspecialchars(APP_URL . $item['url']); ?>" class="nav-item <?php echo $active ? 'active ' : ''; ?><?php echo $hasChildren ? 'has-submenu ' . ($active ? 'expanded' : '') : ''; ?>" data-key="<?php echo $item['key']; ?>" <?php if ($hasChildren): ?>data-submenu-target="<?php echo $submenuId; ?>"<?php endif; ?>>
                     <i class="fas fa-<?php echo $item['icon']; ?>"></i>
                     <span><?php echo $item['title']; ?></span>
                     <?php if (!empty($item['badge'])): ?><span class="badge"><?php echo $item['badge']; ?></span><?php endif; ?>
                 </a>
+                <?php if ($hasChildren): ?>
+                <div class="submenu <?php echo $active ? 'show' : ''; ?>" id="<?php echo $submenuId; ?>">
+                    <?php foreach ($item['children'] as $child):
+                        $childActive = adminNavItemActive($child, $currentPage ?? '');
+                    ?>
+                    <a href="<?php echo htmlspecialchars(APP_URL . $child['url']); ?>" class="nav-item <?php echo $childActive ? 'active' : ''; ?>" data-key="<?php echo $child['key']; ?>">
+                        <i class="fas fa-<?php echo $child['icon']; ?>"></i>
+                        <span><?php echo $child['title']; ?></span>
+                    </a>
+                    <?php endforeach; ?>
+                </div>
+                <?php endif; ?>
                 <?php endforeach; ?>
                 <?php endforeach; ?>
                 
@@ -390,8 +439,18 @@ $displayRole = $roleLabels[$role] ?? ucwords(str_replace('_', ' ', $role));
     
     <script>
     // Close sidebar on outside click (mobile)
-    document.addEventListener('click', function(e) {
-        const sidebar = document.getElementById('sidebar');
+	    document.addEventListener('click', function(e) {
+	        const submenuTrigger = e.target.closest('.nav-item.has-submenu');
+	        if (submenuTrigger) {
+	            e.preventDefault();
+	            const target = document.getElementById(submenuTrigger.dataset.submenuTarget);
+	            if (target) {
+	                target.classList.toggle('show');
+	                submenuTrigger.classList.toggle('expanded');
+	            }
+	            return;
+	        }
+	        const sidebar = document.getElementById('sidebar');
         if (window.innerWidth <= 768 && sidebar.classList.contains('open')) {
             if (!sidebar.contains(e.target) && !e.target.closest('.menu-toggle')) {
                 sidebar.classList.remove('open');

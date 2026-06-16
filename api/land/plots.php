@@ -26,7 +26,7 @@ function getPlots() {
     $db = getDB();
     
     // Optional filters
-    $status = getGet('status', 'available');
+    $status = strtolower(trim((string) getGet('status', 'available')));
     $plotType = getGet('plot_type', null);
     $zone = getGet('zone', null);
     $minArea = getGet('min_area', null);
@@ -40,7 +40,7 @@ function getPlots() {
     $params = [];
     
     if ($status) {
-        $where[] = 'status = ?';
+        $where[] = 'LOWER(status) = ?';
         $params[] = $status;
     }
     
