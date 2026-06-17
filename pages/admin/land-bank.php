@@ -75,6 +75,74 @@ function formatUtilitiesForForm($value) {
     return $value;
 }
 
+function landBankTableExists($db, $table) {
+    try {
+        return (bool) $db->fetchOne(
+            'SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? LIMIT 1',
+            [$table]
+        );
+    } catch (Exception $e) {
+        return false;
+    }
+}
+
+function landBankQuoteIdentifier($identifier) {
+    return '`' . str_replace('`', '``', (string) $identifier) . '`';
+}
+
+function landBankColumns($db, $table) {
+    try {
+        return array_map(static function ($row) {
+            return $row['Field'];
+        }, $db->fetchAll('SHOW COLUMNS FROM ' . landBankQuoteIdentifier($table)));
+    } catch (Exception $e) {
+        return [];
+    }
+}
+
+function landBankPickColumn(array $columns, array $candidates) {
+    $lookup = [];
+    foreach ($columns as $column) {
+        $lookup[strtolower($column)] = $column;
+    }
+
+    foreach ($candidates as $candidate) {
+        $key = strtolower($candidate);
+        if (isset($lookup[$key])) {
+            return $lookup[$key];
+        }
+    }
+
+    return null;
+}
+
+function landBankLoadBlocks($db) {
+    if (!landBankTableExists($db, 'tblBlock')) {
+        return [];
+    }
+
+    $columns = landBankColumns($db, 'tblBlock');
+    $nameColumn = landBankPickColumn($columns, ['BlockName', 'block_name', 'block', 'name']);
+    $codeColumn = landBankPickColumn($columns, ['BlockCode', 'block_code', 'code']);
+    $districtRefColumn = landBankPickColumn($columns, ['did', 'district_id', 'DistrictID', 'DistID', 'dist_id', 'district_code', 'DistrictCode', 'district']);
+
+    if (!$nameColumn) {
+        return [];
+    }
+
+    $select = [
+        landBankQuoteIdentifier($nameColumn) . ' AS block_name'
+    ];
+    $select[] = $codeColumn ? landBankQuoteIdentifier($codeColumn) . ' AS block_code' : 'NULL AS block_code';
+    $select[] = $districtRefColumn ? landBankQuoteIdentifier($districtRefColumn) . ' AS district_id' : 'NULL AS district_id';
+
+    try {
+        return $db->fetchAll('SELECT ' . implode(', ', $select) . ' FROM `tblBlock` ORDER BY ' . landBankQuoteIdentifier($nameColumn));
+    } catch (Exception $e) {
+        return [];
+    }
+}
+
 function buildLandBankPlotPayload($db, $ignorePlotId = 0) {
     $plotNumber = trim($_POST['plot_number'] ?? '');
     $plotNo = trim($_POST['plot_no'] ?? '');
@@ -93,6 +161,8 @@ function buildLandBankPlotPayload($db, $ignorePlotId = 0) {
     $basePricePerSqmInput = trim($_POST['base_price_per_sqm'] ?? '');
     $sector = trim($_POST['sector'] ?? '');
     $regionId = intval($_POST['region_id'] ?? 0);
+    $districtId = intval($_POST['district_id'] ?? 0);
+    $block = trim($_POST['block'] ?? '');
     $status = trim($_POST['status'] ?? 'available');
     $infrastructureType = trim($_POST['infrastructure_type'] ?? 'raw_land');
     $utilitiesAvailable = trim($_POST['utilities_available'] ?? '');
@@ -159,6 +229,8 @@ function buildLandBankPlotPayload($db, $ignorePlotId = 0) {
         'base_price' => $basePrice,
         'sector' => $sector !== '' ? $sector : null,
         'region_id' => $regionId,
+        'district_id' => $districtId > 0 ? $districtId : null,
+        'block' => $block !== '' ? $block : null,
         'location_lat' => $locationLatInput !== '' ? floatval($locationLatInput) : null,
         'location_lng' => $locationLngInput !== '' ? floatval($locationLngInput) : null,
         'boundary_coordinates' => $boundaryCoordinates !== '' ? $boundaryCoordinates : null,
@@ -308,6 +380,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $regions = $db->fetchAll("SELECT id, name FROM regions ORDER BY name ASC");
+$districts = landBankTableExists($db, 'districts')
+    ? $db->fetchAll("SELECT d.id, d.region_id, d.name, d.code, r.name AS region_name FROM districts d LEFT JOIN regions r ON r.id = d.region_id WHERE d.status = 'active' OR d.status IS NULL ORDER BY r.name ASC, d.name ASC")
+    : [];
+$blocks = landBankLoadBlocks($db);
 $editingPlot = $editPlotId > 0 ? $db->fetchOne("SELECT * FROM land_banks WHERE id = ?", [$editPlotId]) : null;
 if ($editPlotId > 0 && !$editingPlot) {
     $_SESSION['flash_error'] = 'Plot not found.';
@@ -316,7 +392,7 @@ if ($editPlotId > 0 && !$editingPlot) {
 }
 $showPlotForm = $showAddPlotForm || $editingPlot;
 $plotForm = $editingPlot ?: [];
-$plots = $db->fetchAll("SELECT lb.*, r.name as region_name FROM land_banks lb LEFT JOIN regions r ON lb.region_id = r.id ORDER BY lb.id DESC LIMIT 100");
+$plots = $db->fetchAll("SELECT lb.*, r.name as region_name, d.name as district_name FROM land_banks lb LEFT JOIN regions r ON lb.region_id = r.id LEFT JOIN districts d ON lb.district_id = d.id ORDER BY lb.id DESC LIMIT 100");
 $notifications = $db->fetchAll("SELECT n.*, (SELECT COUNT(*) FROM la_notification_plots np WHERE np.notification_id = n.id) AS total_plots FROM la_notifications n ORDER BY n.id DESC LIMIT 50");
 $notificationPlots = $db->fetchAll("SELECT np.*, n.notification_no, lb.plot_number FROM la_notification_plots np INNER JOIN la_notifications n ON n.id = np.notification_id INNER JOIN land_banks lb ON lb.id = np.plot_id ORDER BY np.id DESC LIMIT 100");
 $corrigenda = $db->fetchAll("SELECT c.*, n.notification_no FROM la_notification_corrigenda c INNER JOIN la_notifications n ON n.id = c.notification_id ORDER BY c.id DESC LIMIT 50");
@@ -386,7 +462,7 @@ ob_start();
                     <div class="form-row">
                         <div class="form-group">
                             <label>Region *</label>
-                            <select name="region_id" class="form-control" required>
+                            <select name="region_id" id="plotRegion" class="form-control" required>
                                 <option value="">Select region</option>
                                 <?php foreach ($regions as $region): ?>
                                     <option value="<?php echo intval($region['id']); ?>" <?php echo intval($plotForm['region_id'] ?? 0) === intval($region['id']) ? 'selected' : ''; ?>><?php echo e($region['name']); ?></option>
@@ -394,9 +470,30 @@ ob_start();
                             </select>
                         </div>
                         <div class="form-group">
+                            <label>District</label>
+                            <select name="district_id" id="plotDistrict" class="form-control">
+                                <option value="">Select district</option>
+                                <?php foreach ($districts as $district): ?>
+                                    <option value="<?php echo intval($district['id']); ?>" data-region-id="<?php echo intval($district['region_id'] ?? 0); ?>" <?php echo intval($plotForm['district_id'] ?? 0) === intval($district['id']) ? 'selected' : ''; ?>><?php echo e($district['name']); ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Block</label>
+                            <?php if (!empty($blocks)): ?>
+                                <select name="block" id="plotBlock" class="form-control">
+                                    <option value="">Select block</option>
+                                </select>
+                            <?php else: ?>
+                                <input type="text" name="block" class="form-control" placeholder="Block name" value="<?php echo e($plotForm['block'] ?? ''); ?>">
+                            <?php endif; ?>
+                        </div>
+                        <div class="form-group">
                             <label>Sector</label>
                             <input type="text" name="sector" class="form-control" value="<?php echo e($plotForm['sector'] ?? ''); ?>">
                         </div>
+                    </div>
+                    <div class="form-row">
                         <div class="form-group">
                             <label>Status</label>
                             <select name="status" class="form-control">
@@ -519,7 +616,7 @@ ob_start();
                         <label>Select Available Plots</label>
                         <select name="plot_ids[]" class="form-control" multiple size="6" required>
                             <?php foreach ($plots as $p): if (($p['status'] ?? '') !== 'available') continue; ?>
-                                <option value="<?php echo $p['id']; ?>"><?php echo e(($p['plot_number'] ?? '-') . ' | ' . number_format(floatval($p['area_sqm'] ?? 0), 2) . ' sqm'); ?></option>
+                                <option value="<?php echo $p['id']; ?>"><?php echo e(($p['plot_number'] ?? '-') . ' | ' . ($p['region_name'] ?? '-') . ' | ' . ($p['district_name'] ?? '-') . ' | ' . ($p['block'] ?? '-') . ' | ' . number_format(floatval($p['area_sqm'] ?? 0), 2) . ' sqm'); ?></option>
                             <?php endforeach; ?>
                         </select>
                     </div>
@@ -640,7 +737,7 @@ ob_start();
         <div class="table-responsive">
             <table class="table">
                 <thead>
-                    <tr><th>ID</th><th>Plot#</th><th>Type</th><th>Area (sqm)</th><th>Zone</th><th>Region</th><th>Status</th><th>Price/sqm</th><th>Actions</th></tr>
+                    <tr><th>ID</th><th>Plot#</th><th>Type</th><th>Area (sqm)</th><th>Zone</th><th>Region</th><th>District</th><th>Block</th><th>Status</th><th>Price/sqm</th><th>Actions</th></tr>
                 </thead>
                 <tbody>
                     <?php foreach ($plots as $p): ?>
@@ -651,6 +748,8 @@ ob_start();
                         <td><?php echo number_format($p['area_sqm'], 2); ?></td>
                         <td><?php echo e($p['zone']); ?></td>
                         <td><?php echo e($p['region_name'] ?? '-'); ?></td>
+                        <td><?php echo e($p['district_name'] ?? '-'); ?></td>
+                        <td><?php echo e($p['block'] ?? '-'); ?></td>
                         <td><span class="badge badge-<?php echo $p['status'] === 'available' ? 'success' : ($p['status'] === 'allotted' ? 'info' : 'warning'); ?>"><?php echo e($p['status']); ?></span></td>
                         <td>₹<?php echo number_format($p['base_price_per_sqm'], 2); ?></td>
                         <td>
@@ -672,7 +771,75 @@ ob_start();
 </div>
 <?php
 $content = ob_get_clean();
-$scripts = ($scripts ?? '') . <<<'HTML'
+$landBankBlocksJson = json_encode(array_map(static function ($block) {
+    return [
+        'name' => (string) ($block['block_name'] ?? ''),
+        'code' => (string) ($block['block_code'] ?? ''),
+        'district_id' => intval($block['district_id'] ?? 0),
+    ];
+}, $blocks), JSON_UNESCAPED_SLASHES);
+$selectedLandBankBlockJson = json_encode((string) ($plotForm['block'] ?? ''), JSON_UNESCAPED_SLASHES);
+$scripts = ($scripts ?? '') . "
+<script>
+(function () {
+    const regionSelect = document.getElementById('plotRegion');
+    const districtSelect = document.getElementById('plotDistrict');
+    const blockSelect = document.getElementById('plotBlock');
+    const blocks = $landBankBlocksJson || [];
+    const selectedBlock = $selectedLandBankBlockJson || '';
+
+    if (!regionSelect || !districtSelect) {
+        return;
+    }
+
+    function syncDistricts() {
+        const selectedRegion = regionSelect.value;
+        Array.from(districtSelect.options).forEach((option) => {
+            if (!option.value) {
+                option.hidden = false;
+                return;
+            }
+            const matchesRegion = !selectedRegion || option.dataset.regionId === selectedRegion;
+            option.hidden = !matchesRegion;
+            if (!matchesRegion && option.selected) {
+                districtSelect.value = '';
+            }
+        });
+        syncBlocks();
+    }
+
+    function syncBlocks() {
+        if (!blockSelect) {
+            return;
+        }
+
+        const selectedDistrict = parseInt(districtSelect.value || '0', 10);
+        const previousValue = blockSelect.value || selectedBlock;
+        blockSelect.innerHTML = '<option value=\"\">' + (selectedDistrict ? 'Select block' : 'Select district first') + '</option>';
+
+        blocks
+            .filter((block) => !selectedDistrict || parseInt(block.district_id || 0, 10) === selectedDistrict)
+            .forEach((block) => {
+                if (!block.name) {
+                    return;
+                }
+                const option = document.createElement('option');
+                option.value = block.name;
+                option.textContent = block.code ? block.name + ' (' + block.code + ')' : block.name;
+                if (block.name === previousValue) {
+                    option.selected = true;
+                }
+                blockSelect.appendChild(option);
+            });
+    }
+
+    regionSelect.addEventListener('change', syncDistricts);
+    districtSelect.addEventListener('change', syncBlocks);
+    syncDistricts();
+})();
+</script>
+";
+$scripts .= <<<'HTML'
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
 <style>

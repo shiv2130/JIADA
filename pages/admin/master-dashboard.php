@@ -129,7 +129,7 @@ function masterBlockColumnMap($db)
         'primary' => masterPrimaryColumn($columnsMeta),
         'name' => masterPickColumn($columns, ['BlockName', 'block_name', 'block', 'name']),
         'code' => masterPickColumn($columns, ['BlockCode', 'block_code', 'code']),
-        'district_ref' => masterPickColumn($columns, ['DistrictID', 'district_id', 'DistID', 'dist_id', 'district_code', 'DistrictCode', 'district']),
+        'district_ref' => masterPickColumn($columns, ['did', 'district_id', 'DistrictID', 'DistID', 'dist_id', 'district_code', 'DistrictCode', 'district']),
     ];
 }
 
@@ -592,6 +592,8 @@ if ($blockTableAvailable) {
             'district_id' => (int) ($matchedDistrict['id'] ?? 0),
             'district_name' => (string) ($matchedDistrict['district_name'] ?? ''),
             'region_name' => (string) ($matchedDistrict['region_name'] ?? ''),
+            'is_connected' => $matchedDistrict ? 1 : 0,
+            'connection_label' => $matchedDistrict ? 'Connected' : 'Not connected',
         ];
         if (isset($_GET['edit_block']) && (string) $_GET['edit_block'] === $normalizedBlock['block_id']) {
             $editBlock = $normalizedBlock;
@@ -820,7 +822,7 @@ ob_start();
             <div class="alert alert-info">tblBlock exists, but no blocks have been imported yet.</div>
         <?php else: ?>
             <table class="table">
-                <thead><tr><th>Block</th><th>Block Code</th><th>District Ref</th><th>Matched District</th><th>Region</th></tr></thead>
+                <thead><tr><th>Block</th><th>Block Code</th><th>District ID</th><th>Matched District</th><th>Region</th><th>Connection</th></tr></thead>
                 <tbody>
                     <?php foreach (array_slice($blockNormalized, 0, 50) as $block): ?>
                     <tr>
@@ -829,6 +831,7 @@ ob_start();
                         <td><?php echo e($block['district_ref'] ?: '-'); ?></td>
                         <td><?php echo e($block['district_name'] ?: 'Not matched'); ?></td>
                         <td><?php echo e($block['region_name'] ?: '-'); ?></td>
+                        <td><span class="badge <?php echo !empty($block['is_connected']) ? 'badge-success' : 'badge-warning'; ?>"><?php echo e($block['connection_label']); ?></span></td>
                     </tr>
                     <?php endforeach; ?>
                 </tbody>
@@ -850,7 +853,7 @@ ob_start();
                 <div class="alert alert-info">No block rows found in tblBlock. Use the form to add your first block.</div>
             <?php else: ?>
                 <table class="table">
-                    <thead><tr><th>Block</th><th>Block Code</th><th>District Ref</th><th>Matched District</th><th>Region</th><th>Actions</th></tr></thead>
+                    <thead><tr><th>Block</th><th>Block Code</th><th>District ID</th><th>Matched District</th><th>Region</th><th>Connection</th><th>Actions</th></tr></thead>
                     <tbody>
                         <?php foreach ($blockNormalized as $block): ?>
                         <tr>
@@ -859,6 +862,7 @@ ob_start();
                             <td><?php echo e($block['district_ref'] ?: '-'); ?></td>
                             <td><?php echo e($block['district_name'] ?: 'Not matched'); ?></td>
                             <td><?php echo e($block['region_name'] ?: '-'); ?></td>
+                            <td><span class="badge <?php echo !empty($block['is_connected']) ? 'badge-success' : 'badge-warning'; ?>"><?php echo e($block['connection_label']); ?></span></td>
                             <td style="white-space:nowrap;">
                                 <?php if ($block['block_id'] !== ''): ?>
                                 <a href="<?php echo APP_URL; ?>/admin/?page=master-dashboard&tab=blocks&edit_block=<?php echo urlencode($block['block_id']); ?>" class="btn btn-sm btn-outline">Edit</a>
@@ -893,7 +897,7 @@ ob_start();
 
                 <div class="form-group"><label>Block Name *</label><input name="block_name" class="form-control" value="<?php echo e($editBlock['block_name'] ?? ''); ?>" required></div>
                 <div class="form-group"><label>Block Code</label><input name="block_code" class="form-control" value="<?php echo e($editBlock['block_code'] ?? ''); ?>"></div>
-                <div class="form-group"><label>District *</label>
+                <div class="form-group"><label>District * <small style="color:var(--gray);font-weight:500;">(saved in tblBlock.did / district ref)</small></label>
                     <select name="district_id" class="form-control" required>
                         <option value="">Select</option>
                         <?php foreach ($districts as $district): ?>
